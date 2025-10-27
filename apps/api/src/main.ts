@@ -34,6 +34,11 @@ async function bootstrap() {
   // Mount GraphQL Yoga on /api/graphql
   expressApp.use('/api/graphql', yoga);
 
+  // Redirect root path to /api for convenience
+  expressApp.get('/', (_req, res) => {
+    res.redirect('/api');
+  });
+
   const port = parseInt(process.env.PORT || '3001', 10);
   await app.init(); // Init Nest app, but do NOT use app.listen()
   server.listen(port, () => {
