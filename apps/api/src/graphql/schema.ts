@@ -33,6 +33,7 @@ vehicle: Vehicle
 
 
 type Query {
+_empty: String!
 appointments: [Appointment!]!
 }
 
@@ -46,14 +47,21 @@ lockWindowNow(appointmentId: String!): Boolean
 `,
 resolvers: {
   Query: {
-  appointments: async () => {
-  return prisma.appointment.findMany({
-  include: {
-  user: true,
-  vehicle: true,
+    _empty: () => 'ok',
+    appointments: async () => {
+      return prisma.appointment.findMany({
+        include: {
+          user: true,
+          vehicle: true,
+        },
+      });
+    },
   },
-  });
-  },
+  Appointment: {
+    slotStart: (a: any) => (a.slotStart instanceof Date ? a.slotStart.toISOString() : a.slotStart),
+    slotEnd: (a: any) => (a.slotEnd instanceof Date ? a.slotEnd.toISOString() : a.slotEnd),
+    arrivalWindowStart: (a: any) => (a.arrivalWindowStart instanceof Date ? a.arrivalWindowStart.toISOString() : a.arrivalWindowStart),
+    windowLockedAt: (a: any) => (a.windowLockedAt instanceof Date ? a.windowLockedAt.toISOString() : a.windowLockedAt),
   },
   Mutation: {
     internalConfirm: async (_: any, args: { appointmentId: string }) => {

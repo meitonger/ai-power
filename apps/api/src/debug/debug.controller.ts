@@ -15,8 +15,8 @@ export class DebugController {
 
   @Get('columns')
   async columns() {
-    const apptCols = await prisma.$queryRawUnsafe<any[]>(`PRAGMA table_info('Appointment');`);
-    const userCols = await prisma.$queryRawUnsafe<any[]>(`PRAGMA table_info('User');`);
+    const apptCols = await prisma.$queryRawUnsafe(`PRAGMA table_info('Appointment');`) as any[];
+    const userCols = await prisma.$queryRawUnsafe(`PRAGMA table_info('User');`) as any[];
     return {
       appointment_columns: apptCols.map((r: any) => r.name),
       user_columns: userCols.map((r: any) => r.name),

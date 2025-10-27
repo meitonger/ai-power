@@ -1,6 +1,7 @@
 // apps/web/pages/admin/dashboard.tsx
 import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
+import { GRAPHQL_URL } from '../../lib/api';
 
 console.log("🚀 AdminDashboard rendered");
 
@@ -20,7 +21,8 @@ type Appointment = {
   windowLockedAt?: string | null;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+// Use centralized GraphQL URL
+const GQL = GRAPHQL_URL;
 
 export default function AdminDashboard() {
   const [rows, setRows] = useState<Appointment[]>([]);
@@ -30,7 +32,7 @@ export default function AdminDashboard() {
   const fetchAppointments = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/graphql`, {
+      const res = await fetch(GQL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,7 +75,7 @@ export default function AdminDashboard() {
 
   const handleAction = async (id: string, action: string) => {
     try {
-      const res = await fetch(`${API_URL}/api/graphql`, {
+      const res = await fetch(GQL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,7 +108,7 @@ export default function AdminDashboard() {
     <Layout>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
         <h2>Admin Dashboard</h2>
-        <small>API: {API_URL}</small>
+        <small>GraphQL: {GQL}</small>
       </div>
       {msg && <div style={{color:'#b00', marginTop:8}}>{msg}</div>}
       <div style={{marginTop:12, overflowX:'auto'}}>
@@ -148,10 +150,10 @@ export default function AdminDashboard() {
                 </td>
                 <td>—</td>
                 <td>
-                  <button onClick={()=>handleAction(a.id,'internal')}>Internal</button>{' '}
-                  <button onClick={()=>handleAction(a.id,'send')}>Send</button>{' '}
-                  <button onClick={()=>handleAction(a.id,'resend')}>Resend</button>{' '}
-                  <button onClick={()=>handleAction(a.id,'lock')}>Lock</button>
+                  <button onClick={()=>handleAction(a.id,'internalConfirm')}>Internal</button>{' '}
+                  <button onClick={()=>handleAction(a.id,'sendConfirmation')}>Send</button>{' '}
+                  <button onClick={()=>handleAction(a.id,'resendConfirmation')}>Resend</button>{' '}
+                  <button onClick={()=>handleAction(a.id,'lockWindowNow')}>Lock</button>
                 </td>
               </tr>
             ))}
