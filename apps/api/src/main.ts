@@ -35,7 +35,7 @@ async function bootstrap() {
   expressApp.use('/api/graphql', yoga);
 
   // Redirect root path to /api for convenience
-  expressApp.get('/', (_req, res) => {
+  expressApp.get('/', (_req: any, res: any) => {
     res.redirect('/api');
   });
 
