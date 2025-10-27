@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { GRAPHQL_URL } from '../../lib/api';
 
 export default function UserDashboard() {
   const [loading, setLoading] = useState(true);
@@ -7,7 +8,7 @@ export default function UserDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/graphql`, {
+        const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

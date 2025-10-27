@@ -75,8 +75,8 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     (async () => {
       try {
         const [u, v] = await Promise.all([
-          apiGet<User[]>('/api/users'),
-          apiGet<Vehicle[]>('/api/vehicles'),
+          apiGet<User[]>('/users'),
+          apiGet<Vehicle[]>('/vehicles'),
         ]);
         setUsers(u); setVehicles(v);
       } catch (e: any) {
@@ -205,7 +205,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
           `Vehicle Line #${idx+1}\n- Tire: ${tireText}\n- TESLA Filter: ${filterText}\n- Extras: ${extrasText}\n- Subtotal: $${lineSubtotal(line)}\n`;
         const finalNotes = (orderNotes?.trim() ? `Order Notes: ${orderNotes.trim()}\n` : '') + perLine;
 
-        return apiPost<Appointment>('/api/appointments', {
+        return apiPost<Appointment>('/appointments', {
           userId,
           vehicleId: line.vehicleId,
           slotStart: startISO,

@@ -1,6 +1,7 @@
 // web/pages/login.tsx
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { GRAPHQL_URL } from '../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function LoginPage() {
   useEffect(() => {
     const testConnection = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/graphql`, {
+        const res = await fetch(GRAPHQL_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: `query { _empty }` }),
