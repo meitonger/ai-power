@@ -1,0 +1,17 @@
+﻿*.zip
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+__pycache__/
+.venv/
+venv/
+.env
+.env.*
+*.local
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
