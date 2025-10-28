@@ -1,6 +1,7 @@
 // apps/web/pages/admin/dashboard.tsx
 import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
+import Link from 'next/link';
 import { GRAPHQL_URL } from '../../lib/api';
 
 console.log("🚀 AdminDashboard rendered");
@@ -108,7 +109,10 @@ export default function AdminDashboard() {
     <Layout>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
         <h2>Admin Dashboard</h2>
-        <small>GraphQL: {GQL}</small>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <Link href="/admin/appointments/new" style={{ background:'#111827', color:'#fff', padding:'8px 12px', borderRadius:8 }}>+ New</Link>
+          <small>GraphQL: {GQL}</small>
+        </div>
       </div>
       {msg && <div style={{color:'#b00', marginTop:8}}>{msg}</div>}
       <div style={{marginTop:12, overflowX:'auto'}}>
@@ -153,7 +157,8 @@ export default function AdminDashboard() {
                   <button onClick={()=>handleAction(a.id,'internalConfirm')}>Internal</button>{' '}
                   <button onClick={()=>handleAction(a.id,'sendConfirmation')}>Send</button>{' '}
                   <button onClick={()=>handleAction(a.id,'resendConfirmation')}>Resend</button>{' '}
-                  <button onClick={()=>handleAction(a.id,'lockWindowNow')}>Lock</button>
+                  <button onClick={()=>handleAction(a.id,'lockWindowNow')}>Lock</button>{' '}
+                  <Link href={`/admin/appointments/${a.id}/edit`} className="link">Edit</Link>
                 </td>
               </tr>
             ))}
