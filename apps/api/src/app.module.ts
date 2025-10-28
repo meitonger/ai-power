@@ -6,6 +6,7 @@ import { UsersModule } from '../users/users.module';
 import { VehiclesModule } from '../vehicles/vehicles.module';
 import { AppointmentsModule } from '../appointments/appointments.module';
 import { PublicModule } from './public/public.module';
+import { ChatModule } from './chat/chat.module';
 import { RootController } from './root.controller';
 
 @Module({
@@ -16,7 +17,8 @@ import { RootController } from './root.controller';
     VehiclesModule,
     AppointmentsModule,
     PublicModule,
+    ChatModule,
   ],
   controllers: [RootController],
 })
-export class AppModule {}
+export class AppModule {}rt class AppModule {}
