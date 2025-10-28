@@ -54,15 +54,18 @@ const toLocalInput = (d: Date) => {
 
 export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: Appointment[]) => void }) {
   const [step, setStep] = React.useState<Step>(1);
-  const [users, setUsers] = React.useState<User[]>([]);
   const [vehicles, setVehicles] = React.useState<Vehicle[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
+  const [creatingUser, setCreatingUser] = React.useState(false);
 
   // shared booking
   const [userId, setUserId] = React.useState('');
+  const [customerName, setCustomerName] = React.useState('');
+  const [customerEmail, setCustomerEmail] = React.useState('');
+  const [customerPhone, setCustomerPhone] = React.useState('');
   const [slotStartLocal, setSlotStartLocal] = React.useState('');
   const [slotEndLocal, setSlotEndLocal] = React.useState('');
   const [address, setAddress] = React.useState('');
@@ -74,11 +77,8 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   React.useEffect(() => {
     (async () => {
       try {
-        const [u, v] = await Promise.all([
-          apiGet<User[]>('/users'),
-          apiGet<Vehicle[]>('/vehicles'),
-        ]);
-        setUsers(u); setVehicles(v);
+        const v = await apiGet<Vehicle[]>('/vehicles');
+        setVehicles(v);
       } catch (e: any) {
         setError(e?.message ?? 'Failed to load data');
       } finally {
@@ -99,6 +99,11 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     () => vehicles.filter(v => !userId || v.userId === userId),
     [vehicles, userId]
   );
+
+  React.useEffect(() => {
+    // If customer changed, reset vehicles selection to force re-pick
+    setLines(prev => prev.map(l => ({ ...l, vehicleId: '' })));
+  }, [userId]);
 
   function lineSubtotal(line: LineItem): number {
     let sum = 0;
@@ -160,7 +165,10 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
 
   function validateStep(s: Step): string | null {
     if (s === 1) {
-      if (!userId) return 'Please select a customer.';
+      if (!customerName.trim()) return 'Please enter customer name.';
+      const email = customerEmail.trim();
+      const emailOk = !!email && /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email);
+      if (!emailOk) return 'Please enter a valid email.';
       if (!slotStartLocal || !slotEndLocal) return 'Please pick start/end time.';
       const start = new Date(slotStartLocal), end = new Date(slotEndLocal);
       if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 'Invalid time range.';
@@ -229,6 +237,15 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     }
   }
 
+  async function ensureUser(name: string, email: string, phone?: string): Promise<string> {
+    const list = await apiGet<User[]>('/users');
+    const found = list.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (found) return found.id;
+    const tempPassword = Math.random().toString(36).slice(2, 10) + 'Aa1!';
+    const created = await apiPost<User>('/users', { name, email, password: tempPassword, phone });
+    return created.id;
+  }
+
   if (loading) return <div className="info">Loading…</div>;
 
   return (
@@ -248,12 +265,22 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
           {step === 1 && (
             <section className="card">
               <h2>Customer & Schedule</h2>
+              <div className="grid2">
+                <label>
+                  Customer Name
+                  <input type="text" placeholder="Jane Doe" value={customerName}
+                         onChange={(e)=>{ setCustomerName(e.target.value); }} />
+                </label>
+                <label>
+                  Email
+                  <input type="email" placeholder="jane@example.com" value={customerEmail}
+                         onChange={(e)=>{ setCustomerEmail(e.target.value); }} />
+                </label>
+              </div>
               <label>
-                Customer
-                <select value={userId} onChange={(e)=>{ setUserId(e.target.value); setLines([{ vehicleId:'', tire:'', filter:'', extras:{} }]); }}>
-                  <option value="">-- Select user --</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-                </select>
+                Phone (optional)
+                <input type="text" placeholder="555-123-4567" value={customerPhone}
+                       onChange={(e)=>{ setCustomerPhone(e.target.value); }} />
               </label>
 
               <div className="grid2">
@@ -273,7 +300,23 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
               </label>
 
               <div className="nav">
-                <button className="primary" onClick={()=>{ const err = validateStep(1); if (err) setError(err); else { setError(null); setStep(2);} }}>Next →</button>
+                <button className="primary" onClick={async ()=>{
+                  const err = validateStep(1);
+                  if (err) { setError(err); return; }
+                  try {
+                    setCreatingUser(true);
+                    const id = await ensureUser(customerName.trim(), customerEmail.trim(), customerPhone.trim() || undefined);
+                    setUserId(id);
+                    setError(null);
+                    setStep(2);
+                  } catch (e:any) {
+                    setError(e?.message ?? 'Failed to create customer');
+                  } finally {
+                    setCreatingUser(false);
+                  }
+                }} disabled={creatingUser}>
+                  {creatingUser ? 'Saving customer…' : 'Next →'}
+                </button>
               </div>
             </section>
           )}
@@ -303,6 +346,11 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                         ))}
                       </select>
                     </label>
+                    {(!line.vehicleId) && (
+                      <div className="mini" style={{marginTop:4}}>
+                        Vehicles are filtered by the created customer. Add the customer first in Step 1.
+                      </div>
+                    )}
 
                     <div className="grid2">
                       <div>
