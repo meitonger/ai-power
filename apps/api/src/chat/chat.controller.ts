@@ -11,4 +11,11 @@ export class ChatController {
     const reply = await this.chatService.generateResponse(message);
     return { reply };
   }
+
+  @Post('similar-questions')
+  async findSimilarQuestions(@Body() body: { message: string }) {
+    const { message } = body;
+    const questions = await this.chatService.findSimilarQuestions(message);
+    return { questions };
+  }
 }

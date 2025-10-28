@@ -20,7 +20,10 @@ export default function ChatWidget() {
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [similarQuestions, setSimilarQuestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -30,22 +33,60 @@ export default function ChatWidget() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+  useEffect(() => {
+    // Fetch similar questions when user types
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    if (inputText.trim().length > 2) {
+      debounceTimerRef.current = setTimeout(async () => {
+        try {
+          const response = await apiPost('/chat/similar-questions', { message: inputText });
+          if (response.questions && response.questions.length > 0) {
+            setSimilarQuestions(response.questions);
+            setShowSuggestions(true);
+          } else {
+            setSimilarQuestions([]);
+            setShowSuggestions(false);
+          }
+        } catch (error) {
+          console.error('Error fetching similar questions:', error);
+          setSimilarQuestions([]);
+          setShowSuggestions(false);
+        }
+      }, 500); // Debounce for 500ms
+    } else {
+      setSimilarQuestions([]);
+      setShowSuggestions(false);
+    }
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [inputText]);
+
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText;
+    if (!textToSend.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText,
+      text: textToSend,
       sender: 'user',
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
+    setShowSuggestions(false);
+    setSimilarQuestions([]);
     setIsLoading(true);
 
     try {
-      const response = await apiPost('/chat', { message: inputText });
+      const response = await apiPost('/chat', { message: textToSend });
       
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -72,7 +113,15 @@ export default function ChatWidget() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
+  };
+
+  const handleSuggestionClick = (question: string) => {
+    setInputText(question);
+    setShowSuggestions(false);
+    handleSendMessage(question);
   };
 
   return (
@@ -317,6 +366,52 @@ export default function ChatWidget() {
           }
         }
 
+        .suggestions-container {
+          position: absolute;
+          bottom: 100%;
+          left: 0;
+          right: 0;
+          background: white;
+          border-top: 1px solid #e9ecef;
+          max-height: 200px;
+          overflow-y: auto;
+          box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .suggestions-header {
+          padding: 8px 16px;
+          font-size: 12px;
+          color: #666;
+          font-weight: 600;
+          background: #f8f9fa;
+          border-bottom: 1px solid #e9ecef;
+        }
+
+        .suggestion-item {
+          padding: 12px 16px;
+          cursor: pointer;
+          border-bottom: 1px solid #f1f3f5;
+          font-size: 14px;
+          color: #333;
+          transition: background 0.2s;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .suggestion-item:hover {
+          background: #f8f9fa;
+        }
+
+        .suggestion-item:last-child {
+          border-bottom: none;
+        }
+
+        .suggestion-icon {
+          color: #667eea;
+          font-size: 16px;
+        }
+
         @media (max-width: 480px) {
           .chat-window {
             width: calc(100vw - 40px);
@@ -366,7 +461,24 @@ export default function ChatWidget() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="input-container">
+            <div className="input-container" style={{ position: 'relative' }}>
+              {showSuggestions && similarQuestions.length > 0 && (
+                <div className="suggestions-container">
+                  <div className="suggestions-header">
+                    Similar questions you might ask:
+                  </div>
+                  {similarQuestions.map((question, index) => (
+                    <div
+                      key={index}
+                      className="suggestion-item"
+                      onClick={() => handleSuggestionClick(question)}
+                    >
+                      <span className="suggestion-icon">💡</span>
+                      <span>{question}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <input
                 type="text"
                 className="message-input"
@@ -378,7 +490,7 @@ export default function ChatWidget() {
               />
               <button
                 className="send-button"
-                onClick={handleSendMessage}
+                onClick={() => handleSendMessage()}
                 disabled={isLoading || !inputText.trim()}
               >
                 ➤
