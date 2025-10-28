@@ -25,4 +25,14 @@ export class AdminAppointmentsController {
   resend(@Param('id') id: string) {
     return this.svc.resendConfirmation(id);
   }
+
+  @Patch(':id/schedule-state')
+  updateScheduleState(@Param('id') id: string, @Body() body: { state: string }) {
+    return this.svc.updateScheduleState(id, body.state);
+  }
+
+  @Patch(':id/dispatch-status')
+  updateDispatchStatus(@Param('id') id: string, @Body() body: { status: string }) {
+    return this.svc.updateDispatchStatus(id, body.status);
+  }
 }
