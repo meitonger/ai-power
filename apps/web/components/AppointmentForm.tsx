@@ -60,6 +60,11 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [submitting, setSubmitting] = React.useState(false);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
   const [creatingUser, setCreatingUser] = React.useState(false);
+  const [showAddVehicleForLine, setShowAddVehicleForLine] = React.useState<number | null>(null);
+  const [creatingVehicle, setCreatingVehicle] = React.useState(false);
+  const [newVehicle, setNewVehicle] = React.useState<{ make: string; model: string; year: string; trim: string; tireSize: string }>({
+    make: '', model: '', year: '', trim: '', tireSize: ''
+  });
 
   // shared booking
   const [userId, setUserId] = React.useState('');
@@ -100,6 +105,16 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     [vehicles, userId]
   );
 
+  // If exactly one vehicle exists for this customer, auto-select it on empty lines
+  React.useEffect(() => {
+    if (vehiclesForUser.length === 1) {
+      const onlyId = vehiclesForUser[0].id;
+      lines.forEach((l, idx) => {
+        if (!l.vehicleId) updateLine(idx, 'vehicleId', onlyId);
+      });
+    }
+  }, [vehiclesForUser, lines]);
+
   React.useEffect(() => {
     // If customer changed, reset vehicles selection to force re-pick
     setLines(prev => prev.map(l => ({ ...l, vehicleId: '' })));
@@ -132,6 +147,22 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   function removeLine(i: number) { setLines(prev => prev.filter((_, idx) => idx !== i)); }
   function updateLine<K extends keyof LineItem>(i: number, key: K, value: LineItem[K]) {
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [key]: value } : l));
+    if (key === 'vehicleId') {
+      const v = vehicles.find(v => v.id === value);
+      if (v && v.make.toLowerCase() === 'tesla') {
+        const model = v.model.toLowerCase();
+        const map: Record<string, FilterKey> = {
+          'model 3': 'tesla_m3',
+          'model y': 'tesla_my',
+          'model s': 'tesla_ms',
+          'model x': 'tesla_mx',
+        };
+        const keyGuess = Object.keys(map).find(k => model.includes(k));
+        if (typeof i === 'number' && keyGuess) {
+          setLines(prev => prev.map((l, idx) => idx === i ? { ...l, filter: map[keyGuess!] } : l));
+        }
+      }
+    }
   }
   function toggleExtra(i: number, key: ExtraKey, checked: boolean) {
     setLines(prev => prev.map((l, idx) => {
@@ -234,6 +265,39 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
       setError(e?.message ?? 'Failed to create appointments');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function createVehicleForLine(lineIndex: number) {
+    if (!userId) { setError('Create customer first.'); return; }
+    const mk = newVehicle.make.trim();
+    const md = newVehicle.model.trim();
+    const yr = parseInt(newVehicle.year, 10);
+    const tr = newVehicle.trim.trim();
+    const ts = newVehicle.tireSize.trim();
+    if (!mk || !md || !tr || !ts || !Number.isFinite(yr)) {
+      setError('Please fill make, model, year, trim, and tire size.');
+      return;
+    }
+    setError(null);
+    setCreatingVehicle(true);
+    try {
+      const created = await apiPost<Vehicle>('/vehicles', {
+        userId,
+        make: mk,
+        model: md,
+        year: yr,
+        trim: tr,
+        tireSize: ts,
+      });
+      setVehicles(prev => [...prev, created]);
+      updateLine(lineIndex, 'vehicleId', created.id);
+      setShowAddVehicleForLine(null);
+      setNewVehicle({ make: '', model: '', year: '', trim: '', tireSize: '' });
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to create vehicle');
+    } finally {
+      setCreatingVehicle(false);
     }
   }
 
@@ -346,6 +410,54 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                         ))}
                       </select>
                     </label>
+                    <div className="mini" style={{display:'flex', gap:8, alignItems:'center'}}>
+                      <span>{line.vehicleId ? 'Selected.' : 'No vehicle selected.'}</span>
+                      <button
+                        type="button"
+                        className="link small"
+                        onClick={()=>{ setShowAddVehicleForLine(showAddVehicleForLine===idx ? null : idx); setError(null); }}
+                      >{showAddVehicleForLine===idx ? 'Cancel add' : '+ Add new vehicle'}</button>
+                    </div>
+                    {showAddVehicleForLine===idx && (
+                      <div className="addVehicle">
+                        <div className="grid2">
+                          <label>
+                            Make
+                            <input type="text" placeholder="e.g., Tesla" value={newVehicle.make}
+                                   onChange={(e)=>setNewVehicle(v=>({ ...v, make:e.target.value }))} />
+                          </label>
+                          <label>
+                            Model
+                            <input type="text" placeholder="e.g., Model Y" value={newVehicle.model}
+                                   onChange={(e)=>setNewVehicle(v=>({ ...v, model:e.target.value }))} />
+                          </label>
+                        </div>
+                        <div className="grid2">
+                          <label>
+                            Year
+                            <input type="number" placeholder="e.g., 2023" value={newVehicle.year}
+                                   onChange={(e)=>setNewVehicle(v=>({ ...v, year:e.target.value }))} />
+                          </label>
+                          <label>
+                            Trim
+                            <input type="text" placeholder="e.g., Long Range" value={newVehicle.trim}
+                                   onChange={(e)=>setNewVehicle(v=>({ ...v, trim:e.target.value }))} />
+                          </label>
+                        </div>
+                        <label>
+                          Tire Size
+                          <input type="text" placeholder="e.g., 255/45R19" value={newVehicle.tireSize}
+                                 onChange={(e)=>setNewVehicle(v=>({ ...v, tireSize:e.target.value }))} />
+                        </label>
+                        <div className="nav" style={{justifyContent:'flex-start'}}>
+                          <button type="button" className="primary" disabled={creatingVehicle}
+                                  onClick={()=>createVehicleForLine(idx)}>
+                            {creatingVehicle ? 'Adding…' : 'Save vehicle'}
+                          </button>
+                          <button type="button" className="secondary" onClick={()=>setShowAddVehicleForLine(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
                     {(!line.vehicleId) && (
                       <div className="mini" style={{marginTop:4}}>
                         Vehicles are filtered by the created customer. Add the customer first in Step 1.
@@ -509,6 +621,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         .mini { color:#6b7280; font-size:12px; display:grid; gap:2px; }
         .error { background:#fee2e2; color:#991b1b; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
         .success { background:#ecfdf5; color:#065f46; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
+        .addVehicle { border:1px dashed #e5e7eb; border-radius:8px; padding:10px; margin:8px 0; background:#fafafa; }
       `}</style>
     </div>
   );
