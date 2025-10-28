@@ -19,8 +19,48 @@ export class ChatService {
       response: 'You can book an appointment online through our booking page, or call us at ' + this.supportPhone + '. We typically have availability within 2-3 business days.',
     },
     {
-      keywords: ['price', 'cost', 'how much', 'fee', 'charge'],
-      response: 'Our pricing varies based on the service needed. For a detailed quote, please call us at ' + this.supportPhone + ' or book an appointment for an estimate.',
+      keywords: ['oil change price', 'oil change cost', 'how much oil change'],
+      response: 'Our oil change services start at $39.99 for conventional oil and $69.99 for full synthetic oil. This includes up to 5 quarts of oil, a new filter, and a complimentary multi-point inspection. Price may vary based on your vehicle type.',
+    },
+    {
+      keywords: ['tire price', 'tire cost', 'how much tire', 'tire installation'],
+      response: 'Tire prices vary by size and brand, typically ranging from $80 to $300 per tire. Installation is $25 per tire and includes mounting, balancing, valve stems, and disposal of old tires. We offer price matching and financing options.',
+    },
+    {
+      keywords: ['brake price', 'brake cost', 'how much brake', 'brake pad'],
+      response: 'Brake pad replacement starts at $149.99 per axle for most vehicles. This includes pads, hardware, and labor. If rotors need resurfacing or replacement, prices range from $299 to $499 per axle. We offer a lifetime warranty on brake pads.',
+    },
+    {
+      keywords: ['alignment price', 'alignment cost', 'wheel alignment'],
+      response: 'A standard 2-wheel alignment is $79.99, and a 4-wheel alignment is $119.99. This service typically takes about an hour and helps ensure even tire wear and proper handling. We recommend alignment checks annually or if you notice uneven tire wear.',
+    },
+    {
+      keywords: ['diagnostic price', 'diagnostic cost', 'check engine'],
+      response: 'Our diagnostic service is $89.99, which is waived if you proceed with the recommended repairs. This includes a complete computerized scan and inspection to identify any issues with your vehicle.',
+    },
+    {
+      keywords: ['battery price', 'battery cost', 'new battery'],
+      response: 'Car batteries range from $129 to $249 depending on your vehicle\'s requirements. Installation is free with battery purchase. All our batteries come with a warranty, and we offer free battery testing.',
+    },
+    {
+      keywords: ['rotation price', 'tire rotation cost'],
+      response: 'Tire rotation is $29.99 and takes about 20-30 minutes. We recommend rotating your tires every 5,000-7,000 miles to ensure even wear. This service is complimentary with any oil change or tire purchase.',
+    },
+    {
+      keywords: ['inspection price', 'inspection cost', 'safety inspection'],
+      response: 'State safety inspections are $25, and emissions testing is $35. A comprehensive pre-purchase vehicle inspection is $149.99 and includes a detailed report of the vehicle\'s condition.',
+    },
+    {
+      keywords: ['transmission price', 'transmission cost', 'transmission service'],
+      response: 'Transmission fluid service starts at $149.99. More extensive transmission repairs can range from $500 to $3,500 depending on the issue. We recommend a transmission inspection to provide an accurate quote for your specific needs.',
+    },
+    {
+      keywords: ['ac price', 'air conditioning', 'ac recharge', 'freon'],
+      response: 'AC recharge service starts at $149.99 and includes leak testing and up to 1 lb of refrigerant. More extensive AC repairs range from $300 to $1,200. We offer a free AC system diagnosis with any service.',
+    },
+    {
+      keywords: ['price', 'cost', 'how much', 'fee', 'charge', 'pricing', 'estimate'],
+      response: 'Our pricing varies based on the service needed. Common services include: Oil changes ($40-$70), Tire installation ($25/tire), Brake service ($150-$499), Alignments ($80-$120), and Diagnostics ($90). For a detailed quote specific to your vehicle, call us at ' + this.supportPhone + ' or book an appointment.',
     },
     {
       keywords: ['service', 'offer', 'what do you', 'provide'],
