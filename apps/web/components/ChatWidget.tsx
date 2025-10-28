@@ -6,6 +6,12 @@ interface Message {
   text: string;
   sender: 'user' | 'bot';
   timestamp: Date;
+  similarQuestions?: SimilarQuestion[];
+}
+
+interface SimilarQuestion {
+  question: string;
+  keywords: string[];
 }
 
 export default function ChatWidget() {
@@ -52,6 +58,7 @@ export default function ChatWidget() {
         text: response.reply,
         sender: 'bot',
         timestamp: new Date(),
+        similarQuestions: response.similarQuestions || [],
       };
 
       setMessages((prev) => [...prev, botMessage]);
@@ -73,6 +80,10 @@ export default function ChatWidget() {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  const handleSimilarQuestionClick = (question: string) => {
+    setInputText(question);
   };
 
   return (
@@ -317,6 +328,39 @@ export default function ChatWidget() {
           }
         }
 
+        .similar-questions {
+          margin-top: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .similar-questions-label {
+          font-size: 11px;
+          color: #666;
+          font-weight: 600;
+          margin-bottom: 2px;
+        }
+
+        .similar-question-button {
+          background: white;
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 8px 12px;
+          font-size: 13px;
+          text-align: left;
+          cursor: pointer;
+          transition: all 0.2s;
+          color: #495057;
+        }
+
+        .similar-question-button:hover {
+          background: #f8f9fa;
+          border-color: #667eea;
+          color: #667eea;
+          transform: translateX(2px);
+        }
+
         @media (max-width: 480px) {
           .chat-window {
             width: calc(100vw - 40px);
@@ -350,6 +394,20 @@ export default function ChatWidget() {
                       minute: '2-digit',
                     })}
                   </div>
+                  {message.sender === 'bot' && message.similarQuestions && message.similarQuestions.length > 0 && (
+                    <div className="similar-questions">
+                      <div className="similar-questions-label">Related questions:</div>
+                      {message.similarQuestions.map((sq, idx) => (
+                        <button
+                          key={idx}
+                          className="similar-question-button"
+                          onClick={() => handleSimilarQuestionClick(sq.question)}
+                        >
+                          {sq.question}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {isLoading && (

@@ -8,7 +8,7 @@ export class ChatController {
   @Post()
   async handleChatMessage(@Body() body: { message: string }) {
     const { message } = body;
-    const reply = await this.chatService.generateResponse(message);
-    return { reply };
+    const response = await this.chatService.generateResponse(message);
+    return response;
   }
 }
