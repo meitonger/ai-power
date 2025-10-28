@@ -45,6 +45,8 @@ resendConfirmation(appointmentId: String!): Boolean
 customerConfirm(appointmentId: String!): Boolean
 setDraft(appointmentId: String!): Boolean
 lockWindowNow(appointmentId: String!): Boolean
+updateScheduleState(appointmentId: String!, state: String!): Boolean
+updateDispatchStatus(appointmentId: String!, status: String!): Boolean
 }
 `,
 resolvers: {
@@ -113,6 +115,30 @@ resolvers: {
       await prisma.appointment.update({
         where: { id: args.appointmentId },
         data: { windowLockedAt: new Date().toISOString() },
+      });
+      return true;
+    },
+    
+    updateScheduleState: async (_: any, args: { appointmentId: string; state: string }) => {
+      const validStates = ['DRAFT', 'INTERNAL_CONFIRMED', 'SENT_TO_CUSTOMER', 'CUSTOMER_CONFIRMED', 'CUSTOMER_DECLINED', 'CANCELLED'];
+      if (!validStates.includes(args.state)) {
+        throw new Error(`Invalid state: ${args.state}`);
+      }
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { scheduleState: args.state },
+      });
+      return true;
+    },
+    
+    updateDispatchStatus: async (_: any, args: { appointmentId: string; status: string }) => {
+      const validStatuses = ['UNASSIGNED', 'ASSIGNED', 'IN_ROUTE', 'COMPLETE'];
+      if (!validStatuses.includes(args.status)) {
+        throw new Error(`Invalid status: ${args.status}`);
+      }
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { dispatchStatus: args.status },
       });
       return true;
     },

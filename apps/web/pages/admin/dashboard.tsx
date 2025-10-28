@@ -99,6 +99,52 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleStatusChange = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
+    try {
+      const mutation = type === 'schedule' ? 'updateScheduleState' : 'updateDispatchStatus';
+      const param = type === 'schedule' ? 'state' : 'status';
+      
+      const res = await fetch(GQL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            mutation {
+              ${mutation}(appointmentId: "${id}", ${param}: "${value}")
+            }
+          `,
+        }),
+      });
+      const json = await res.json();
+      if (json.errors) throw new Error(json.errors[0].message);
+      await fetchAppointments();
+    } catch (e: any) {
+      setMsg(e.message);
+    }
+  };
+
+  const getStatusColor = (state: string): string => {
+    switch (state) {
+      case 'CUSTOMER_CONFIRMED': return '#10b981'; // green
+      case 'SENT_TO_CUSTOMER': return '#f59e0b'; // orange
+      case 'INTERNAL_CONFIRMED': return '#3b82f6'; // blue
+      case 'DRAFT': return '#94a3b8'; // gray
+      case 'CUSTOMER_DECLINED': return '#ef4444'; // red
+      case 'CANCELLED': return '#ef4444'; // red
+      default: return '#6b7280';
+    }
+  };
+
+  const getDispatchColor = (status: string): string => {
+    switch (status) {
+      case 'COMPLETE': return '#10b981'; // green
+      case 'IN_ROUTE': return '#3b82f6'; // blue
+      case 'ASSIGNED': return '#f59e0b'; // orange
+      case 'UNASSIGNED': return '#94a3b8'; // gray
+      default: return '#6b7280';
+    }
+  };
+
   useEffect(() => {
     fetchAppointments();
   }, []);
@@ -172,7 +218,10 @@ export default function AdminDashboard() {
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>When</th>
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>User</th>
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Vehicle</th>
-                    <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>State</th>
+                    <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>
+                      <div>Schedule Status</div>
+                      <div style={{fontSize:11, fontWeight:400, color:'#9ca3af', marginTop:2}}>& Dispatch</div>
+                    </th>
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Window</th>
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Tech</th>
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Actions</th>
@@ -194,22 +243,66 @@ export default function AdminDashboard() {
                         <div style={{fontSize:12, color:'#666'}}>{a.vehicle?.year} · {a.vehicle?.trim}</div>
                       </td>
                       <td style={{padding:12}}>
-                        <div style={{
-                          display:'inline-block',
-                          padding:'4px 8px',
-                          borderRadius:4,
-                          fontSize:12,
-                          fontWeight:600,
-                          background: a.scheduleState === 'CUSTOMER_CONFIRMED' ? '#d1fae5' : 
-                                     a.scheduleState === 'SENT_TO_CUSTOMER' ? '#fef3c7' :
-                                     a.scheduleState === 'INTERNAL_CONFIRMED' ? '#dbeafe' : 
-                                     a.scheduleState === 'DRAFT' ? '#f3e8ff' : '#f3f4f6',
-                          color: a.scheduleState === 'CUSTOMER_CONFIRMED' ? '#065f46' :
-                                a.scheduleState === 'SENT_TO_CUSTOMER' ? '#92400e' :
-                                a.scheduleState === 'INTERNAL_CONFIRMED' ? '#1e40af' : 
-                                a.scheduleState === 'DRAFT' ? '#6b21a8' : '#374151'
-                        }}>{a.scheduleState}</div>
-                        <div style={{fontSize:12, color:'#666', marginTop:4}}>Dispatch: {a.dispatchStatus}</div>
+                        <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
+                          <span style={{
+                            width:10,
+                            height:10,
+                            borderRadius:'50%',
+                            background: getStatusColor(a.scheduleState),
+                            flexShrink:0
+                          }}></span>
+                          <select 
+                            value={a.scheduleState}
+                            onChange={(e) => handleStatusChange(a.id, 'schedule', e.target.value)}
+                            style={{
+                              padding:'4px 8px',
+                              borderRadius:6,
+                              border:'1px solid #e5e7eb',
+                              fontSize:12,
+                              fontWeight:500,
+                              cursor:'pointer',
+                              background:'white',
+                              color: '#374151',
+                              flex:1
+                            }}
+                          >
+                            <option value="DRAFT">Draft</option>
+                            <option value="INTERNAL_CONFIRMED">Internal Confirmed</option>
+                            <option value="SENT_TO_CUSTOMER">Sent to Customer</option>
+                            <option value="CUSTOMER_CONFIRMED">Customer Confirmed</option>
+                            <option value="CUSTOMER_DECLINED">Customer Declined</option>
+                            <option value="CANCELLED">Cancelled</option>
+                          </select>
+                        </div>
+                        <div style={{display:'flex', alignItems:'center', gap:8}}>
+                          <span style={{
+                            width:10,
+                            height:10,
+                            borderRadius:'50%',
+                            background: getDispatchColor(a.dispatchStatus),
+                            flexShrink:0
+                          }}></span>
+                          <select 
+                            value={a.dispatchStatus}
+                            onChange={(e) => handleStatusChange(a.id, 'dispatch', e.target.value)}
+                            style={{
+                              padding:'4px 8px',
+                              borderRadius:6,
+                              border:'1px solid #e5e7eb',
+                              fontSize:12,
+                              fontWeight:500,
+                              cursor:'pointer',
+                              background:'white',
+                              color: '#374151',
+                              flex:1
+                            }}
+                          >
+                            <option value="UNASSIGNED">Unassigned</option>
+                            <option value="ASSIGNED">Assigned</option>
+                            <option value="IN_ROUTE">In Route</option>
+                            <option value="COMPLETE">Complete</option>
+                          </select>
+                        </div>
                       </td>
                       <td style={{fontSize:12, color:'#666', padding:12}}>
                         <div>Mode: {a.schedulingMode}</div>
