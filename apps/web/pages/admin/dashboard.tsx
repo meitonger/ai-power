@@ -202,10 +202,12 @@ export default function AdminDashboard() {
                           fontWeight:600,
                           background: a.scheduleState === 'CUSTOMER_CONFIRMED' ? '#d1fae5' : 
                                      a.scheduleState === 'SENT_TO_CUSTOMER' ? '#fef3c7' :
-                                     a.scheduleState === 'INTERNAL_CONFIRMED' ? '#dbeafe' : '#f3f4f6',
+                                     a.scheduleState === 'INTERNAL_CONFIRMED' ? '#dbeafe' : 
+                                     a.scheduleState === 'DRAFT' ? '#f3e8ff' : '#f3f4f6',
                           color: a.scheduleState === 'CUSTOMER_CONFIRMED' ? '#065f46' :
                                 a.scheduleState === 'SENT_TO_CUSTOMER' ? '#92400e' :
-                                a.scheduleState === 'INTERNAL_CONFIRMED' ? '#1e40af' : '#374151'
+                                a.scheduleState === 'INTERNAL_CONFIRMED' ? '#1e40af' : 
+                                a.scheduleState === 'DRAFT' ? '#6b21a8' : '#374151'
                         }}>{a.scheduleState}</div>
                         <div style={{fontSize:12, color:'#666', marginTop:4}}>Dispatch: {a.dispatchStatus}</div>
                       </td>
@@ -217,9 +219,11 @@ export default function AdminDashboard() {
                       <td style={{padding:12}}>—</td>
                       <td style={{padding:12}}>
                         <div style={{display:'flex', flexWrap:'wrap', gap:4}}>
+                          <button onClick={()=>handleAction(a.id,'setDraft')} style={{padding:'4px 8px', fontSize:12, border:'1px solid #d1d5db', borderRadius:4, background:'white', cursor:'pointer'}}>Draft</button>
                           <button onClick={()=>handleAction(a.id,'internalConfirm')} style={{padding:'4px 8px', fontSize:12, border:'1px solid #d1d5db', borderRadius:4, background:'white', cursor:'pointer'}}>Internal</button>
                           <button onClick={()=>handleAction(a.id,'sendConfirmation')} style={{padding:'4px 8px', fontSize:12, border:'1px solid #d1d5db', borderRadius:4, background:'white', cursor:'pointer'}}>Send</button>
                           <button onClick={()=>handleAction(a.id,'resendConfirmation')} style={{padding:'4px 8px', fontSize:12, border:'1px solid #d1d5db', borderRadius:4, background:'white', cursor:'pointer'}}>Resend</button>
+                          <button onClick={()=>handleAction(a.id,'customerConfirm')} style={{padding:'4px 8px', fontSize:12, border:'1px solid #d1d5db', borderRadius:4, background:'white', cursor:'pointer'}}>Confirmed</button>
                           <button onClick={()=>handleAction(a.id,'lockWindowNow')} style={{padding:'4px 8px', fontSize:12, border:'1px solid #d1d5db', borderRadius:4, background:'white', cursor:'pointer'}}>Lock</button>
                           <Link href={`/admin/appointments/${a.id}/edit`} style={{padding:'4px 8px', fontSize:12, color:'#2563eb', textDecoration:'none'}}>Edit</Link>
                         </div>
