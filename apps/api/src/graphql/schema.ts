@@ -42,6 +42,8 @@ type Mutation {
 internalConfirm(appointmentId: String!): Boolean
 sendConfirmation(appointmentId: String!): Boolean
 resendConfirmation(appointmentId: String!): Boolean
+customerConfirm(appointmentId: String!): Boolean
+setDraft(appointmentId: String!): Boolean
 lockWindowNow(appointmentId: String!): Boolean
 }
 `,
@@ -65,39 +67,55 @@ resolvers: {
   },
   Mutation: {
     internalConfirm: async (_: any, args: { appointmentId: string }) => {
-    await prisma.appointment.update({
-    where: { id: args.appointmentId },
-    data: { scheduleState: 'internal-confirmed' },
-    });
-    return true;
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { scheduleState: 'INTERNAL_CONFIRMED' },
+      });
+      return true;
     },
-    
     
     sendConfirmation: async (_: any, args: { appointmentId: string }) => {
-    await prisma.appointment.update({
-    where: { id: args.appointmentId },
-    data: { scheduleState: 'confirmation-sent' },
-    });
-    return true;
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { scheduleState: 'SENT_TO_CUSTOMER' },
+      });
+      return true;
     },
-    
     
     resendConfirmation: async (_: any, args: { appointmentId: string }) => {
-    await prisma.appointment.update({
-    where: { id: args.appointmentId },
-    data: { scheduleState: 'confirmation-resent' },
-    });
-    return true;
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { scheduleState: 'SENT_TO_CUSTOMER' },
+      });
+      return true;
     },
     
+    customerConfirm: async (_: any, args: { appointmentId: string }) => {
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { 
+          scheduleState: 'CUSTOMER_CONFIRMED',
+          customerConfirmedAt: new Date().toISOString()
+        },
+      });
+      return true;
+    },
+    
+    setDraft: async (_: any, args: { appointmentId: string }) => {
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { scheduleState: 'DRAFT' },
+      });
+      return true;
+    },
     
     lockWindowNow: async (_: any, args: { appointmentId: string }) => {
-    await prisma.appointment.update({
-    where: { id: args.appointmentId },
-    data: { windowLockedAt: new Date().toISOString() },
-    });
-    return true;
+      await prisma.appointment.update({
+        where: { id: args.appointmentId },
+        data: { windowLockedAt: new Date().toISOString() },
+      });
+      return true;
     },
-    },
-    },
+  },
+  },
 });
