@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -35,7 +35,7 @@ export class AppointmentsService {
     });
   }
 
-  create(dto: CreateAppointmentDto) {
+  async create(dto: CreateAppointmentDto) {
     // Map DTO to DB shape – keep it simple; your DTO likely already matches these fields
     const {
       userId,
@@ -49,14 +49,37 @@ export class AppointmentsService {
       arrivalWindowEnd,
     } = dto as any;
 
+    const start = new Date(slotStart);
+    const end = new Date(slotEnd);
+    if (!(start instanceof Date && !isNaN(start.getTime())) || !(end instanceof Date && !isNaN(end.getTime()))) {
+      throw new BadRequestException('Invalid slotStart/slotEnd');
+    }
+    if (end <= start) {
+      throw new BadRequestException('slotEnd must be after slotStart');
+    }
+
+    // Prevent overlapping appointments (exclude cancelled)
+    const overlapping = await this.prisma.appointment.findFirst({
+      where: {
+        scheduleState: { not: 'CANCELLED' },
+        slotStart: { lt: end },
+        slotEnd: { gt: start },
+      },
+      select: { id: true, slotStart: true, slotEnd: true },
+    });
+
+    if (overlapping) {
+      throw new ConflictException('Time slot overlaps an existing appointment');
+    }
+
     return this.prisma.appointment.create({
       data: {
         userId,
         vehicleId,
         address,
         notes: notes ?? null,
-        slotStart: new Date(slotStart),
-        slotEnd: new Date(slotEnd),
+        slotStart: start,
+        slotEnd: end,
         schedulingMode: schedulingMode ?? 'WINDOW',
         arrivalWindowStart: arrivalWindowStart ? new Date(arrivalWindowStart) : null,
         arrivalWindowEnd: arrivalWindowEnd ? new Date(arrivalWindowEnd) : null,
