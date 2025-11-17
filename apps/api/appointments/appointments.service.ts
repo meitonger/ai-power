@@ -2,11 +2,15 @@ import { Injectable, InternalServerErrorException, Logger, ConflictException, Ba
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
+import { NotificationService } from '../src/notifications/notification.service';
 
 @Injectable()
 export class AppointmentsService {
   private readonly log = new Logger(AppointmentsService.name);
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifier: NotificationService,
+  ) {}
 
   async findAll() {
     try {
@@ -72,7 +76,7 @@ export class AppointmentsService {
       throw new ConflictException('Time slot overlaps an existing appointment');
     }
 
-    return this.prisma.appointment.create({
+    const appointment = await this.prisma.appointment.create({
       data: {
         userId,
         vehicleId,
@@ -85,6 +89,9 @@ export class AppointmentsService {
         arrivalWindowEnd: arrivalWindowEnd ? new Date(arrivalWindowEnd) : null,
       },
     });
+
+    await this.notifyAdminAppointmentBooked(appointment.id);
+    return appointment;
   }
 
   update(id: string, dto: UpdateAppointmentDto) {
@@ -98,5 +105,25 @@ export class AppointmentsService {
       where: { id },
       data,
     });
+  }
+
+  private async notifyAdminAppointmentBooked(appointmentId: string) {
+    try {
+      const appointment = await this.prisma.appointment.findUnique({
+        where: { id: appointmentId },
+        include: {
+          user: { select: { name: true, email: true, phone: true } },
+          vehicle: { select: { make: true, model: true, year: true, trim: true } },
+        },
+      });
+
+      if (!appointment) {
+        return;
+      }
+
+      await this.notifier.notifyAdminAppointmentBooked(appointment);
+    } catch (err: any) {
+      this.log.error(`Failed to notify admin for appointment ${appointmentId}`, err?.stack || err);
+    }
   }
 }

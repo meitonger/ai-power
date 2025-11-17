@@ -1,5 +1,5 @@
 // apps/api/appointments/admin-appointments.service.ts
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../src/notifications/notification.service';
 import { randomBytes } from 'crypto';
@@ -13,6 +13,8 @@ function computeWindowLockTime(slotStart: Date): Date {
 
 @Injectable()
 export class AdminAppointmentsService {
+  private readonly log = new Logger(AdminAppointmentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifier: NotificationService,
@@ -31,7 +33,7 @@ export class AdminAppointmentsService {
 
     const windowLockedAt = computeWindowLockTime(appt.slotStart);
 
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: { id },
       data: {
         scheduleState: 'INTERNAL_CONFIRMED',
@@ -39,6 +41,9 @@ export class AdminAppointmentsService {
       },
       include: { user: true, vehicle: true, services: true, tech: true },
     });
+
+    await this.notifyCustomerOfConfirmation(updated);
+    return updated;
   }
 
   async sendConfirmation(id: string, expiresHours = 72) {
@@ -128,5 +133,21 @@ export class AdminAppointmentsService {
       data: { dispatchStatus: status },
       include: { user: true, vehicle: true, services: true, tech: true },
     });
+  }
+
+  private async notifyCustomerOfConfirmation(appointment: any) {
+    if (!appointment.user?.email && !process.env.MAIL_TO_OVERRIDE) {
+      this.log.warn(`Appointment ${appointment.id} confirmed but user email is missing`);
+      return;
+    }
+
+    try {
+      await this.notifier.sendCustomerAppointmentConfirmed(appointment);
+    } catch (err: any) {
+      this.log.error(
+        `Failed to send customer confirmation email for appointment ${appointment.id}`,
+        err?.stack || err,
+      );
+    }
   }
 }
