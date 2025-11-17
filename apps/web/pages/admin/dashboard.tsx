@@ -45,6 +45,9 @@ export default function AdminDashboard() {
             query {
               appointments {
                 id
+                userId
+                vehicleId
+                address
                 slotStart
                 slotEnd
                 scheduleState
