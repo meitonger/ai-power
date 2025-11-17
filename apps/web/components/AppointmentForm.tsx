@@ -62,8 +62,8 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [creatingUser, setCreatingUser] = React.useState(false);
   const [showAddVehicleForLine, setShowAddVehicleForLine] = React.useState<number | null>(null);
   const [creatingVehicle, setCreatingVehicle] = React.useState(false);
-  const [newVehicle, setNewVehicle] = React.useState<{ make: string; model: string; year: string; trim: string; tireSize: string }>({
-    make: '', model: '', year: '', trim: '', tireSize: ''
+  const [newVehicle, setNewVehicle] = React.useState<{ make: string; model: string; year: string }>({
+    make: '', model: '', year: ''
   });
 
   // shared booking
@@ -273,10 +273,8 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     const mk = newVehicle.make.trim();
     const md = newVehicle.model.trim();
     const yr = parseInt(newVehicle.year, 10);
-    const tr = newVehicle.trim.trim();
-    const ts = newVehicle.tireSize.trim();
-    if (!mk || !md || !tr || !ts || !Number.isFinite(yr)) {
-      setError('Please fill make, model, year, trim, and tire size.');
+    if (!mk || !md || !Number.isFinite(yr)) {
+      setError('Please fill make, model, and year.');
       return;
     }
     setError(null);
@@ -287,13 +285,13 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         make: mk,
         model: md,
         year: yr,
-        trim: tr,
-        tireSize: ts,
+        trim: 'Standard',
+        tireSize: 'N/A',
       });
       setVehicles(prev => [...prev, created]);
       updateLine(lineIndex, 'vehicleId', created.id);
       setShowAddVehicleForLine(null);
-      setNewVehicle({ make: '', model: '', year: '', trim: '', tireSize: '' });
+      setNewVehicle({ make: '', model: '', year: '' });
     } catch (e: any) {
       setError(e?.message ?? 'Failed to create vehicle');
     } finally {
@@ -406,7 +404,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                       <select value={line.vehicleId} onChange={(e)=>updateLine(idx,'vehicleId',e.target.value)}>
                         <option value="">-- Select vehicle --</option>
                         {vlist.map(v => (
-                          <option key={v.id} value={v.id}>{v.make} {v.model} {v.year} {v.trim} [{v.tireSize}]</option>
+                          <option key={v.id} value={v.id}>{v.year} {v.make} {v.model}</option>
                         ))}
                       </select>
                     </label>
@@ -420,34 +418,20 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                     </div>
                     {showAddVehicleForLine===idx && (
                       <div className="addVehicle">
-                        <div className="grid2">
-                          <label>
-                            Make
-                            <input type="text" placeholder="e.g., Tesla" value={newVehicle.make}
-                                   onChange={(e)=>setNewVehicle(v=>({ ...v, make:e.target.value }))} />
-                          </label>
-                          <label>
-                            Model
-                            <input type="text" placeholder="e.g., Model Y" value={newVehicle.model}
-                                   onChange={(e)=>setNewVehicle(v=>({ ...v, model:e.target.value }))} />
-                          </label>
-                        </div>
-                        <div className="grid2">
-                          <label>
-                            Year
-                            <input type="number" placeholder="e.g., 2023" value={newVehicle.year}
-                                   onChange={(e)=>setNewVehicle(v=>({ ...v, year:e.target.value }))} />
-                          </label>
-                          <label>
-                            Trim
-                            <input type="text" placeholder="e.g., Long Range" value={newVehicle.trim}
-                                   onChange={(e)=>setNewVehicle(v=>({ ...v, trim:e.target.value }))} />
-                          </label>
-                        </div>
                         <label>
-                          Tire Size
-                          <input type="text" placeholder="e.g., 255/45R19" value={newVehicle.tireSize}
-                                 onChange={(e)=>setNewVehicle(v=>({ ...v, tireSize:e.target.value }))} />
+                          Year
+                          <input type="number" placeholder="e.g., 2023" value={newVehicle.year}
+                                 onChange={(e)=>setNewVehicle(v=>({ ...v, year:e.target.value }))} />
+                        </label>
+                        <label>
+                          Make
+                          <input type="text" placeholder="e.g., Tesla" value={newVehicle.make}
+                                 onChange={(e)=>setNewVehicle(v=>({ ...v, make:e.target.value }))} />
+                        </label>
+                        <label>
+                          Model
+                          <input type="text" placeholder="e.g., Model Y" value={newVehicle.model}
+                                 onChange={(e)=>setNewVehicle(v=>({ ...v, model:e.target.value }))} />
                         </label>
                         <div className="nav" style={{justifyContent:'flex-start'}}>
                           <button type="button" className="primary" disabled={creatingVehicle}
