@@ -12,7 +12,6 @@ type Appointment = {
   user?: { name: string; email: string };
   vehicle?: { make: string; model: string; year: number; trim: string };
   userId: string;
-  vehicleId: string;
   slotStart: string;
   slotEnd: string;
   address: string;
@@ -45,7 +44,6 @@ export default function AdminDashboard() {
             query {
               appointments {
                 id
-                vehicleId
                 address
                 slotStart
                 slotEnd
