@@ -20,13 +20,20 @@ trim: String
 
 type Appointment {
 id: String!
+userId: String!
+vehicleId: String!
+address: String!
+notes: String
 slotStart: String!
 slotEnd: String!
 scheduleState: String!
 dispatchStatus: String!
 schedulingMode: String!
 arrivalWindowStart: String
+arrivalWindowEnd: String
 windowLockedAt: String
+customerConfirmedAt: String
+techId: String
 user: User
 vehicle: Vehicle
 }
@@ -65,7 +72,9 @@ resolvers: {
     slotStart: (a: any) => (a.slotStart instanceof Date ? a.slotStart.toISOString() : a.slotStart),
     slotEnd: (a: any) => (a.slotEnd instanceof Date ? a.slotEnd.toISOString() : a.slotEnd),
     arrivalWindowStart: (a: any) => (a.arrivalWindowStart instanceof Date ? a.arrivalWindowStart.toISOString() : a.arrivalWindowStart),
+    arrivalWindowEnd: (a: any) => (a.arrivalWindowEnd instanceof Date ? a.arrivalWindowEnd.toISOString() : a.arrivalWindowEnd),
     windowLockedAt: (a: any) => (a.windowLockedAt instanceof Date ? a.windowLockedAt.toISOString() : a.windowLockedAt),
+    customerConfirmedAt: (a: any) => (a.customerConfirmedAt instanceof Date ? a.customerConfirmedAt.toISOString() : a.customerConfirmedAt),
   },
   Mutation: {
     internalConfirm: async (_: any, args: { appointmentId: string }) => {
