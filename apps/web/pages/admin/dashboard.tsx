@@ -45,7 +45,6 @@ export default function AdminDashboard() {
             query {
               appointments {
                 id
-                userId
                 vehicleId
                 address
                 slotStart
@@ -238,7 +237,7 @@ export default function AdminDashboard() {
                         <div style={{fontSize:12, color:'#666'}}>→ {new Date(a.slotEnd).toLocaleString()}</div>
                       </td>
                       <td style={{padding:12}}>
-                        <div style={{fontWeight:500}}>{a.user?.name ?? a.userId}</div>
+                        <div style={{fontWeight:500}}>{a.user?.name ?? 'Unknown User'}</div>
                         <div style={{fontSize:12, color:'#666'}}>{a.user?.email ?? ''}</div>
                       </td>
                       <td style={{padding:12}}>
