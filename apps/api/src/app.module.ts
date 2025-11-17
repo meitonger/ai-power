@@ -21,4 +21,4 @@ import { RootController } from './root.controller';
   ],
   controllers: [RootController],
 })
-export class AppModule {}rt class AppModule {}
+export class AppModule {}
