@@ -267,15 +267,16 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     [vehicles, userId]
   );
 
-  // If exactly one vehicle exists for this customer, auto-select it on empty lines
-  React.useEffect(() => {
-    if (vehiclesForUser.length === 1) {
+    // If exactly one vehicle exists for this customer, auto-select it on empty lines
+    React.useEffect(() => {
+      if (vehiclesForUser.length !== 1) return;
       const onlyId = vehiclesForUser[0].id;
-      lines.forEach((l, idx) => {
-        if (!l.vehicleId) updateLine(idx, 'vehicleId', onlyId);
-      });
-    }
-  }, [vehiclesForUser, lines]);
+      const hasEmptyLine = lines.some(line => !line.vehicleId);
+      if (!hasEmptyLine) return;
+      setLines(prev =>
+        prev.map(line => (line.vehicleId ? line : { ...line, vehicleId: onlyId })),
+      );
+    }, [vehiclesForUser, lines]);
 
   React.useEffect(() => {
     // If customer changed, reset vehicles selection to force re-pick
