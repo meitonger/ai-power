@@ -62,18 +62,19 @@ export class AppointmentsService {
       throw new BadRequestException('slotEnd must be after slotStart');
     }
 
-    // Prevent overlapping appointments (exclude cancelled)
-    const overlapping = await this.prisma.appointment.findFirst({
+    // Prevent overlapping appointments for the *same vehicle* (allow stacking other vehicles)
+    const overlappingForVehicle = await this.prisma.appointment.findFirst({
       where: {
         scheduleState: { not: 'CANCELLED' },
+        vehicleId,
         slotStart: { lt: end },
         slotEnd: { gt: start },
       },
       select: { id: true, slotStart: true, slotEnd: true },
     });
 
-    if (overlapping) {
-      throw new ConflictException('Time slot overlaps an existing appointment');
+    if (overlappingForVehicle) {
+      throw new ConflictException('This vehicle already has an appointment in that time range');
     }
 
     const appointment = await this.prisma.appointment.create({
