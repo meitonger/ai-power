@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import TruckCalendar from '../../components/TruckCalendar';
 import Link from 'next/link';
-import { GRAPHQL_URL } from '../../lib/api';
+import { GRAPHQL_URL, apiPatch } from '../../lib/api';
 
 console.log("🚀 AdminDashboard rendered");
 
@@ -46,6 +46,23 @@ const buildAppointmentsQuery = (includeAddress: boolean) => `
 
 // Use centralized GraphQL URL
 const GQL = GRAPHQL_URL;
+
+const isMissingMutationError = (errors: any, mutationName: string) =>
+  Array.isArray(errors) &&
+  errors.some(
+    (err: any) =>
+      typeof err?.message === 'string' &&
+      err.message.includes(`Cannot query field "${mutationName}" on type "Mutation"`),
+  );
+
+const updateStatusViaRest = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
+  const path =
+    type === 'schedule'
+      ? `/admin/appointments/${id}/schedule-state`
+      : `/admin/appointments/${id}/dispatch-status`;
+  const payload = type === 'schedule' ? { state: value } : { status: value };
+  await apiPatch(path, payload);
+};
 
 export default function AdminDashboard() {
   const [rows, setRows] = useState<Appointment[]>([]);
@@ -133,29 +150,36 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleStatusChange = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
-    try {
-      const mutation = type === 'schedule' ? 'updateScheduleState' : 'updateDispatchStatus';
-      const param = type === 'schedule' ? 'state' : 'status';
-      
-      const res = await fetch(GQL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            mutation {
-              ${mutation}(appointmentId: "${id}", ${param}: "${value}")
-            }
-          `,
-        }),
-      });
-      const json = await res.json();
-      if (json.errors) throw new Error(json.errors[0].message);
-      await fetchAppointments();
-    } catch (e: any) {
-      setMsg(e.message);
-    }
-  };
+    const handleStatusChange = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
+      try {
+        const mutation = type === 'schedule' ? 'updateScheduleState' : 'updateDispatchStatus';
+        const param = type === 'schedule' ? 'state' : 'status';
+
+        const res = await fetch(GQL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `
+              mutation {
+                ${mutation}(appointmentId: "${id}", ${param}: "${value}")
+              }
+            `,
+          }),
+        });
+        const json = await res.json();
+        if (json.errors) {
+          if (isMissingMutationError(json.errors, mutation)) {
+            await updateStatusViaRest(id, type, value);
+            await fetchAppointments();
+            return;
+          }
+          throw new Error(json.errors[0].message);
+        }
+        await fetchAppointments();
+      } catch (e: any) {
+        setMsg(e.message);
+      }
+    };
 
   const getStatusColor = (state: string): string => {
     switch (state) {
