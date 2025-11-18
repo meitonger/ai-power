@@ -2,11 +2,9 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import fs from 'node:fs';
+import { ensureDatabaseUrl } from '../src/utils/ensureDatabaseUrl';
 
-// Ensure a default SQLite DB path for local/dev if none provided
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'file:./prisma/dev.db';
-}
+ensureDatabaseUrl();
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
