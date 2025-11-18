@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import TruckCalendar from '../../components/TruckCalendar';
 import Link from 'next/link';
-import { GRAPHQL_URL, apiPatch } from '../../lib/api';
+import { adminApi } from '../../lib/admin';
 
 console.log("🚀 AdminDashboard rendered");
 
@@ -24,44 +24,9 @@ type Appointment = {
 
 type ViewType = 'calendar' | 'table';
 
-type GraphQLAppointment = Omit<Appointment, 'address'> & { address?: string | null };
-
-const buildAppointmentsQuery = (includeAddress: boolean) => `
-  query {
-    appointments {
-      id
-      ${includeAddress ? 'address' : ''}
-      slotStart
-      slotEnd
-      scheduleState
-      dispatchStatus
-      schedulingMode
-      arrivalWindowStart
-      windowLockedAt
-      user { name email }
-      vehicle { make model year trim }
-    }
-  }
-`;
-
-// Use centralized GraphQL URL
-const GQL = GRAPHQL_URL;
-
-const isMissingMutationError = (errors: any, mutationName: string) =>
-  Array.isArray(errors) &&
-  errors.some(
-    (err: any) =>
-      typeof err?.message === 'string' &&
-      err.message.includes(`Cannot query field "${mutationName}" on type "Mutation"`),
-  );
-
-const updateStatusViaRest = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
-  const path =
-    type === 'schedule'
-      ? `/admin/appointments/${id}/schedule-state`
-      : `/admin/appointments/${id}/dispatch-status`;
-  const payload = type === 'schedule' ? { state: value } : { status: value };
-  await apiPatch(path, payload);
+type ApiAppointment = Appointment & {
+  services?: { id: string; kind: string; name: string }[];
+  tech?: { id: string; name: string } | null;
 };
 
 export default function AdminDashboard() {
@@ -69,60 +34,35 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [viewType, setViewType] = useState<ViewType>('calendar');
-  const [addressSupported, setAddressSupported] = useState(true);
 
   const fetchAppointments = async () => {
     setLoading(true);
+    setMsg(null);
     try {
-      const runQuery = async (includeAddress: boolean) => {
-        const res = await fetch(GQL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: buildAppointmentsQuery(includeAddress) }),
-        });
-        return res.json();
-      };
+      const data = await adminApi.listAppointments();
+      const normalized: Appointment[] = (data ?? []).map((appt: ApiAppointment) => ({
+        id: appt.id,
+        userId: appt.userId,
+        vehicleId: appt.vehicleId,
+        slotStart: appt.slotStart,
+        slotEnd: appt.slotEnd,
+        address: appt.address ?? '',
+        scheduleState: appt.scheduleState,
+        dispatchStatus: appt.dispatchStatus,
+        schedulingMode: appt.schedulingMode,
+        arrivalWindowStart: appt.arrivalWindowStart ?? null,
+        arrivalWindowEnd: appt.arrivalWindowEnd ?? null,
+        windowLockedAt: appt.windowLockedAt ?? null,
+        techId: appt.techId ?? null,
+        user: appt.user ?? undefined,
+        vehicle: appt.vehicle ?? undefined,
+      }));
 
-      let includeAddress = addressSupported;
-      let json = await runQuery(includeAddress);
-
-      if (json.errors) {
-        const missingAddress =
-          includeAddress &&
-          Array.isArray(json.errors) &&
-          json.errors.some(
-            (err: any) =>
-              typeof err?.message === 'string' &&
-              err.message.includes('Cannot query field \"address\"'),
-          );
-
-        if (missingAddress) {
-          console.warn('⚠️ Address field not supported by API yet, retrying without it.');
-          setAddressSupported(false);
-          json = await runQuery(false);
-          if (json.errors) {
-            console.error('❌ GraphQL error after fallback:', json.errors);
-            throw new Error(json.errors[0].message);
-          }
-        } else {
-          console.error('❌ GraphQL error:', json.errors);
-          throw new Error(json.errors[0].message);
-        }
-      }
-
-      const normalized: Appointment[] = (json.data?.appointments ?? []).map(
-        (appt: GraphQLAppointment) => ({
-          ...appt,
-          address: appt.address ?? '',
-        }),
-      );
-
-      console.log('✅ Got data:', json.data);
+      console.log('✅ Got data:', normalized.length);
       setRows(normalized);
-      setMsg(null);
     } catch (e: any) {
-      console.error('❌ Fetch failed:', e.message);
-      setMsg(e.message);
+      console.error('❌ Fetch failed:', e?.message || e);
+      setMsg(e?.message || 'Failed to load appointments');
       setRows([]);
     } finally {
       setLoading(false);
@@ -131,55 +71,48 @@ export default function AdminDashboard() {
 
   const handleAction = async (id: string, action: string) => {
     try {
-      const res = await fetch(GQL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            mutation {
-              ${action}(appointmentId: "${id}")
-            }
-          `,
-        }),
-      });
-      const json = await res.json();
-      if (json.errors) throw new Error(json.errors[0].message);
+      setMsg(null);
+      switch (action) {
+        case 'setDraft':
+          await adminApi.setDraft(id);
+          break;
+        case 'internalConfirm':
+          await adminApi.internalConfirm(id);
+          break;
+        case 'sendConfirmation':
+          await adminApi.sendConfirmation(id);
+          break;
+        case 'resendConfirmation':
+          await adminApi.resendConfirmation(id);
+          break;
+        case 'customerConfirm':
+          await adminApi.customerConfirm(id);
+          break;
+        case 'lockWindowNow':
+          await adminApi.lockWindowNow(id);
+          break;
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
       await fetchAppointments();
     } catch (e: any) {
-      setMsg(e.message);
+      setMsg(e?.message || 'Action failed');
     }
   };
 
-    const handleStatusChange = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
-      try {
-        const mutation = type === 'schedule' ? 'updateScheduleState' : 'updateDispatchStatus';
-        const param = type === 'schedule' ? 'state' : 'status';
-
-        const res = await fetch(GQL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: `
-              mutation {
-                ${mutation}(appointmentId: "${id}", ${param}: "${value}")
-              }
-            `,
-          }),
-        });
-        const json = await res.json();
-        if (json.errors) {
-          if (isMissingMutationError(json.errors, mutation)) {
-            await updateStatusViaRest(id, type, value);
-            await fetchAppointments();
-            return;
-          }
-          throw new Error(json.errors[0].message);
-        }
-        await fetchAppointments();
-      } catch (e: any) {
-        setMsg(e.message);
+  const handleStatusChange = async (id: string, type: 'schedule' | 'dispatch', value: string) => {
+    try {
+      setMsg(null);
+      if (type === 'schedule') {
+        await adminApi.updateScheduleState(id, value);
+      } else {
+        await adminApi.updateDispatchStatus(id, value);
       }
-    };
+      await fetchAppointments();
+    } catch (e: any) {
+      setMsg(e?.message || 'Failed to update status');
+    }
+  };
 
   const getStatusColor = (state: string): string => {
     switch (state) {
@@ -255,12 +188,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-        {msg && <div style={{color:'#b00', marginTop:8, marginBottom:12, background:'#fee', padding:12, borderRadius:8}}>{msg}</div>}
-        {!msg && !addressSupported && (
-          <div style={{color:'#92400e', marginTop:8, marginBottom:12, background:'#fef3c7', padding:12, borderRadius:8}}>
-            Address field is not available on the connected API yet. The schedule loads without it, but consider updating the API to surface appointment addresses.
-          </div>
-        )}
+      {msg && <div style={{color:'#b00', marginTop:8, marginBottom:12, background:'#fee', padding:12, borderRadius:8}}>{msg}</div>}
       
       {loading ? (
         <div style={{textAlign:'center', padding:40, color:'#666'}}>Loading truck schedule...</div>
@@ -306,13 +234,9 @@ export default function AdminDashboard() {
                           <div style={{fontWeight:500}}>{a.vehicle?.make} {a.vehicle?.model}</div>
                           <div style={{fontSize:12, color:'#666'}}>{a.vehicle?.year} · {a.vehicle?.trim}</div>
                         </td>
-                        <td style={{padding:12, maxWidth:260}}>
-                          {addressSupported ? (
-                            <div style={{fontSize:13, color:'#374151', lineHeight:1.4}}>{a.address || '—'}</div>
-                          ) : (
-                            <div style={{fontSize:12, color:'#9ca3af'}}>Address not returned by API</div>
-                          )}
-                        </td>
+                      <td style={{padding:12, maxWidth:260}}>
+                        <div style={{fontSize:13, color:'#374151', lineHeight:1.4}}>{a.address || '—'}</div>
+                      </td>
                       <td style={{padding:12}}>
                         <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
                           <span style={{

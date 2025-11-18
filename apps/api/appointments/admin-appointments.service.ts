@@ -103,6 +103,36 @@ export class AdminAppointmentsService {
     });
   }
 
+  async setDraft(id: string) {
+    const appt = await this.prisma.appointment.findUnique({ where: { id } });
+    if (!appt) throw new BadRequestException('Appointment not found');
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        scheduleState: 'DRAFT',
+        customerConfirmToken: null,
+        customerConfirmExpires: null,
+        customerConfirmedAt: null,
+      },
+      include: { user: true, vehicle: true, services: true, tech: true },
+    });
+  }
+
+  async customerConfirm(id: string) {
+    const appt = await this.prisma.appointment.findUnique({ where: { id } });
+    if (!appt) throw new BadRequestException('Appointment not found');
+
+    return this.prisma.appointment.update({
+      where: { id },
+      data: {
+        scheduleState: 'CUSTOMER_CONFIRMED',
+        customerConfirmedAt: new Date(),
+      },
+      include: { user: true, vehicle: true, services: true, tech: true },
+    });
+  }
+
   async updateScheduleState(id: string, state: string) {
     const validStates = ['DRAFT', 'INTERNAL_CONFIRMED', 'SENT_TO_CUSTOMER', 'CUSTOMER_CONFIRMED', 'CUSTOMER_DECLINED', 'CANCELLED'];
     if (!validStates.includes(state)) {
