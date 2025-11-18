@@ -52,12 +52,19 @@ const toLocalInput = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
+const SLOT_DURATION_MS = 60 * 60 * 1000;
 const getDefaultSlotRange = () => {
   const start = new Date();
   start.setMinutes(0, 0, 0);
   start.setHours(start.getHours() + 1);
-  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const end = new Date(start.getTime() + SLOT_DURATION_MS);
   return { start: toLocalInput(start), end: toLocalInput(end) };
+};
+const deriveSlotEndLocal = (startLocal: string) => {
+  if (!startLocal) return '';
+  const start = new Date(startLocal);
+  if (isNaN(start.getTime())) return '';
+  return toLocalInput(new Date(start.getTime() + SLOT_DURATION_MS));
 };
 
 const formatSlotSummary = (startIso?: string | null, endIso?: string | null) => {
@@ -92,12 +99,16 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [customerEmail, setCustomerEmail] = React.useState('');
   const [customerPhone, setCustomerPhone] = React.useState('');
   const [slotStartLocal, setSlotStartLocal] = React.useState('');
-  const [slotEndLocal, setSlotEndLocal] = React.useState('');
+  const slotEndLocal = React.useMemo(() => deriveSlotEndLocal(slotStartLocal), [slotStartLocal]);
   const [address, setAddress] = React.useState('');
   const [orderNotes, setOrderNotes] = React.useState('');
   const [slotStatus, setSlotStatus] = React.useState<'idle'|'checking'|'available'|'blocked'|'error'>('idle');
   const [slotStatusMsg, setSlotStatusMsg] = React.useState('');
   const [slotConflictRange, setSlotConflictRange] = React.useState<{ start: string; end: string } | null>(null);
+  const autoRangeSummary = React.useMemo(
+    () => formatSlotSummary(slotStartLocal, slotEndLocal),
+    [slotStartLocal, slotEndLocal]
+  );
   const slotCheckSeq = React.useRef(0);
 
   // per-vehicle lines
@@ -118,9 +129,8 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
 
   // default times: next top of hour -> +1h
   React.useEffect(() => {
-    const { start, end } = getDefaultSlotRange();
+    const { start } = getDefaultSlotRange();
     setSlotStartLocal(s => s || start);
-    setSlotEndLocal(e => e || end);
   }, []);
 
   React.useEffect(() => {
@@ -176,14 +186,13 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   }, [slotStartLocal, slotEndLocal, userId]);
 
   const resetWizard = React.useCallback(() => {
-    const { start, end } = getDefaultSlotRange();
+    const { start } = getDefaultSlotRange();
     setStep(1);
     setUserId('');
     setCustomerName('');
     setCustomerEmail('');
     setCustomerPhone('');
     setSlotStartLocal(start);
-    setSlotEndLocal(end);
     setAddress('');
     setOrderNotes('');
     setLines([createEmptyLine()]);
@@ -309,40 +318,43 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     }));
   }
 
-  function validateStep(s: Step): string | null {
-    if (s === 1) {
-      if (!customerName.trim()) return 'Please enter customer name.';
-      const email = customerEmail.trim();
-      const emailOk = !!email && /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email);
-      if (!emailOk) return 'Please enter a valid email.';
-      if (!slotStartLocal || !slotEndLocal) return 'Please pick start/end time.';
-      const start = new Date(slotStartLocal), end = new Date(slotEndLocal);
-      if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 'Invalid time range.';
-      if (!address.trim()) return 'Please enter the service address.';
-    }
-    if (s === 2) {
-      if (lines.length === 0) return 'Add at least one vehicle.';
-      for (let i = 0; i < lines.length; i++) {
-        const L = lines[i];
-        if (!L.vehicleId) return `Line ${i+1}: select a vehicle.`;
-        const hasPrimary = !!L.tire || !!L.filter;
-        const hasExtras  = Object.keys(L.extras).length > 0;
-        if (!hasPrimary && !hasExtras) return `Line ${i+1}: choose a service (tire/filter/extra).`;
+    function validateStep(s: Step): string | null {
+      if (s === 1) {
+        if (!customerName.trim()) return 'Please enter customer name.';
+        const email = customerEmail.trim();
+        const emailOk = !!email && /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email);
+        if (!emailOk) return 'Please enter a valid email.';
+        if (!slotStartLocal) return 'Please pick a start time.';
+        const start = new Date(slotStartLocal);
+        const end = slotEndLocal ? new Date(slotEndLocal) : new Date(start.getTime() + SLOT_DURATION_MS);
+        if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) return 'Invalid time range.';
+        if (!address.trim()) return 'Please enter the service address.';
       }
+      if (s === 2) {
+        if (lines.length === 0) return 'Add at least one vehicle.';
+        for (let i = 0; i < lines.length; i++) {
+          const L = lines[i];
+          if (!L.vehicleId) return `Line ${i+1}: select a vehicle.`;
+          const hasPrimary = !!L.tire || !!L.filter;
+          const hasExtras  = Object.keys(L.extras).length > 0;
+          if (!hasPrimary && !hasExtras) return `Line ${i+1}: choose a service (tire/filter/extra).`;
+        }
+      }
+      return null;
     }
-    return null;
-  }
 
-  async function submitAll() {
-    const err = validateStep(1) || validateStep(2);
-    if (err) { setError(err); setStep( err.includes('Line') ? 2 : 1 ); return; }
-    setError(null); setSubmitting(true); setSuccessMsg(null); setResetCountdown(null);
+    async function submitAll() {
+      const err = validateStep(1) || validateStep(2);
+      if (err) { setError(err); setStep( err.includes('Line') ? 2 : 1 ); return; }
+      setError(null); setSubmitting(true); setSuccessMsg(null); setResetCountdown(null);
 
-    try {
-      const startISO = new Date(slotStartLocal).toISOString();
-      const endISO   = new Date(slotEndLocal).toISOString();
+      try {
+        const startDate = new Date(slotStartLocal);
+        const endDate = slotEndLocal ? new Date(slotEndLocal) : new Date(startDate.getTime() + SLOT_DURATION_MS);
+        const startISO = startDate.toISOString();
+        const endISO   = endDate.toISOString();
 
-      const requests = lines.map((line, idx) => {
+        const requests = lines.map((line, idx) => {
         const tireText   = line.tire   ? `${TIRE_SERVICES[line.tire].label} - $${TIRE_SERVICES[line.tire].price}` : 'None';
         const filterText = line.filter ? `${FILTER_SERVICES[line.filter].label} - $${FILTER_SERVICES[line.filter].price}` : 'None';
         const extrasList: string[] = [];
@@ -467,22 +479,21 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                          onChange={(e)=>{ setCustomerEmail(e.target.value); }} />
                 </label>
               </div>
-              <label>
-                Phone (optional)
-                <input type="text" placeholder="555-123-4567" value={customerPhone}
-                       onChange={(e)=>{ setCustomerPhone(e.target.value); }} />
-              </label>
+                <label>
+                  Phone (optional)
+                  <input type="text" placeholder="555-123-4567" value={customerPhone}
+                         onChange={(e)=>{ setCustomerPhone(e.target.value); }} />
+                </label>
 
-                <div className="grid2">
-                  <label>
-                    Start time
-                    <input type="datetime-local" value={slotStartLocal} onChange={(e)=>setSlotStartLocal(e.target.value)} />
-                  </label>
-                  <label>
-                    End time
-                    <input type="datetime-local" value={slotEndLocal} onChange={(e)=>setSlotEndLocal(e.target.value)} />
-                  </label>
-                </div>
+                <label>
+                  Start time
+                  <input type="datetime-local" value={slotStartLocal} onChange={(e)=>setSlotStartLocal(e.target.value)} />
+                  <small className="autoRangeNote">
+                    {autoRangeSummary
+                      ? `Blocks ${autoRangeSummary} (1 hour window).`
+                      : 'Pick a start time to block a 1-hour window.'}
+                  </small>
+                </label>
 
                 {slotStatus !== 'idle' && (
                   <div className={`slotStatusBanner ${slotStatus}`}>
@@ -758,6 +769,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         .sumRow { display:flex; justify-content:space-between; padding:4px 0; }
         .sumRow.total { border-top:1px dashed #e5e7eb; margin-top:6px; padding-top:6px; }
         .mini { color:#6b7280; font-size:12px; display:grid; gap:2px; }
+        .autoRangeNote { color:#6b7280; font-size:12px; }
         .error { background:#fee2e2; color:#991b1b; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
         .success { background:#ecfdf5; color:#065f46; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
         .countdown { font-size:12px; margin-top:4px; color:#047857; }
