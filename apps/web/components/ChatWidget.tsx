@@ -428,7 +428,7 @@ export default function ChatWidget() {
             <div className="chat-header">
               <div>
                 <h3>Customer Support</h3>
-                <p>We're here to help!</p>
+                  <p>We&apos;re here to help!</p>
               </div>
               <button className="close-button" onClick={() => setIsOpen(false)}>
                 ×
