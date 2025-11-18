@@ -44,12 +44,20 @@ type LineItem = {
   extras: ExtraSelection;
 };
 type Step = 1 | 2 | 3;
+const createEmptyLine = (): LineItem => ({ vehicleId: '', tire: '', filter: '', extras: {} });
 
 /* ---------- helpers ---------- */
 const money = (n: number) => `$${n}`;
 const toLocalInput = (d: Date) => {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const getDefaultSlotRange = () => {
+  const start = new Date();
+  start.setMinutes(0, 0, 0);
+  start.setHours(start.getHours() + 1);
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  return { start: toLocalInput(start), end: toLocalInput(end) };
 };
 
 export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: Appointment[]) => void }) {
@@ -59,6 +67,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [successMsg, setSuccessMsg] = React.useState<string | null>(null);
+  const [resetCountdown, setResetCountdown] = React.useState<number | null>(null);
   const [creatingUser, setCreatingUser] = React.useState(false);
   const [showAddVehicleForLine, setShowAddVehicleForLine] = React.useState<number | null>(null);
   const [creatingVehicle, setCreatingVehicle] = React.useState(false);
@@ -77,7 +86,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [orderNotes, setOrderNotes] = React.useState('');
 
   // per-vehicle lines
-  const [lines, setLines] = React.useState<LineItem[]>([{ vehicleId: '', tire: '', filter: '', extras: {} }]);
+  const [lines, setLines] = React.useState<LineItem[]>([createEmptyLine()]);
 
   React.useEffect(() => {
     (async () => {
@@ -94,11 +103,46 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
 
   // default times: next top of hour -> +1h
   React.useEffect(() => {
-    const now = new Date(); now.setMinutes(0,0,0); now.setHours(now.getHours()+1);
-    const end = new Date(now.getTime()+60*60*1000);
-    setSlotStartLocal(s => s || toLocalInput(now));
-    setSlotEndLocal(e => e || toLocalInput(end));
+    const { start, end } = getDefaultSlotRange();
+    setSlotStartLocal(s => s || start);
+    setSlotEndLocal(e => e || end);
   }, []);
+
+  const resetWizard = React.useCallback(() => {
+    const { start, end } = getDefaultSlotRange();
+    setStep(1);
+    setUserId('');
+    setCustomerName('');
+    setCustomerEmail('');
+    setCustomerPhone('');
+    setSlotStartLocal(start);
+    setSlotEndLocal(end);
+    setAddress('');
+    setOrderNotes('');
+    setLines([createEmptyLine()]);
+    setSuccessMsg(null);
+    setError(null);
+    setShowAddVehicleForLine(null);
+    setNewVehicle({ make: '', model: '', year: '' });
+    setCreatingVehicle(false);
+    setCreatingUser(false);
+    setResetCountdown(null);
+  }, []);
+
+  React.useEffect(() => {
+    if (resetCountdown === null) return;
+    if (resetCountdown <= 0) {
+      resetWizard();
+      return;
+    }
+    const timer = setTimeout(() => {
+      setResetCountdown(prev => {
+        if (prev === null) return null;
+        return Math.max(prev - 1, 0);
+      });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [resetCountdown, resetWizard]);
 
   const vehiclesForUser = React.useMemo(
     () => vehicles.filter(v => !userId || v.userId === userId),
@@ -221,7 +265,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   async function submitAll() {
     const err = validateStep(1) || validateStep(2);
     if (err) { setError(err); setStep( err.includes('Line') ? 2 : 1 ); return; }
-    setError(null); setSubmitting(true); setSuccessMsg(null);
+    setError(null); setSubmitting(true); setSuccessMsg(null); setResetCountdown(null);
 
     try {
       const startISO = new Date(slotStartLocal).toISOString();
@@ -258,7 +302,13 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
       const ok = results.filter(r => r.status === 'fulfilled') as PromiseFulfilledResult<Appointment>[];
       const fail = results.filter(r => r.status === 'rejected')  as PromiseRejectedResult[];
 
-      setSuccessMsg(`Created ${ok.length} appointment(s). ${fail.length ? `Failed ${fail.length}.` : ''}`);
+      const summary = fail.length
+        ? `Created ${ok.length} appointment(s). Failed ${fail.length}.`
+        : `Created ${ok.length} appointment(s).`;
+      setSuccessMsg(summary);
+      if (ok.length > 0 && fail.length === 0) {
+        setResetCountdown(3);
+      }
       if (onSuccess) onSuccess(ok.map(r => r.value));
       setStep(3);
     } catch (e: any) {
@@ -319,7 +369,14 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
           <span className={step>=3?'active':''}>3. Review & Submit</span>
         </div>
         {error && <div className="error">{error}</div>}
-        {successMsg && <div className="success">{successMsg}</div>}
+        {successMsg && (
+          <div className="success">
+            {successMsg}
+            {resetCountdown !== null && resetCountdown > 0 && (
+              <div className="countdown">Returning to Step 1 in {resetCountdown}s…</div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="content">
@@ -605,6 +662,7 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         .mini { color:#6b7280; font-size:12px; display:grid; gap:2px; }
         .error { background:#fee2e2; color:#991b1b; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
         .success { background:#ecfdf5; color:#065f46; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
+        .countdown { font-size:12px; margin-top:4px; color:#047857; }
         .addVehicle { border:1px dashed #e5e7eb; border-radius:8px; padding:10px; margin:8px 0; background:#fafafa; }
       `}</style>
     </div>
