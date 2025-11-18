@@ -278,9 +278,10 @@ export default function AdminDashboard() {
               <table style={{width:'100%', borderCollapse:'collapse'}}>
                 <thead>
                   <tr style={{borderBottom:'2px solid #e5e7eb'}}>
-                    <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>When</th>
-                    <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>User</th>
-                    <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Vehicle</th>
+                      <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>When</th>
+                      <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>User</th>
+                      <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Vehicle</th>
+                      <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>Address</th>
                     <th style={{textAlign:'left', padding:12, fontWeight:600, color:'#374151'}}>
                       <div>Schedule Status</div>
                       <div style={{fontSize:11, fontWeight:400, color:'#9ca3af', marginTop:2}}>& Dispatch</div>
@@ -297,14 +298,21 @@ export default function AdminDashboard() {
                         <div style={{fontWeight:500}}>{new Date(a.slotStart).toLocaleString()}</div>
                         <div style={{fontSize:12, color:'#666'}}>→ {new Date(a.slotEnd).toLocaleString()}</div>
                       </td>
-                      <td style={{padding:12}}>
-                        <div style={{fontWeight:500}}>{a.user?.name ?? 'Unknown User'}</div>
-                        <div style={{fontSize:12, color:'#666'}}>{a.user?.email ?? ''}</div>
-                      </td>
-                      <td style={{padding:12}}>
-                        <div style={{fontWeight:500}}>{a.vehicle?.make} {a.vehicle?.model}</div>
-                        <div style={{fontSize:12, color:'#666'}}>{a.vehicle?.year} · {a.vehicle?.trim}</div>
-                      </td>
+                        <td style={{padding:12}}>
+                          <div style={{fontWeight:500}}>{a.user?.name ?? 'Unknown User'}</div>
+                          <div style={{fontSize:12, color:'#666'}}>{a.user?.email ?? ''}</div>
+                        </td>
+                        <td style={{padding:12}}>
+                          <div style={{fontWeight:500}}>{a.vehicle?.make} {a.vehicle?.model}</div>
+                          <div style={{fontSize:12, color:'#666'}}>{a.vehicle?.year} · {a.vehicle?.trim}</div>
+                        </td>
+                        <td style={{padding:12, maxWidth:260}}>
+                          {addressSupported ? (
+                            <div style={{fontSize:13, color:'#374151', lineHeight:1.4}}>{a.address || '—'}</div>
+                          ) : (
+                            <div style={{fontSize:12, color:'#9ca3af'}}>Address not returned by API</div>
+                          )}
+                        </td>
                       <td style={{padding:12}}>
                         <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
                           <span style={{
@@ -388,7 +396,7 @@ export default function AdminDashboard() {
                   ))}
                   {sorted.length===0 && (
                     <tr>
-                      <td colSpan={7} style={{color:'#666', textAlign:'center', padding:40}}>
+                        <td colSpan={8} style={{color:'#666', textAlign:'center', padding:40}}>
                         No truck appointments scheduled
                       </td>
                     </tr>
