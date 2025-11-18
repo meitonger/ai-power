@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { AdminAppointmentsService } from './admin-appointments.service';
 
 
@@ -24,6 +24,21 @@ export class AdminAppointmentsController {
   @Post(':id/resend-confirmation')
   resend(@Param('id') id: string) {
     return this.svc.resendConfirmation(id);
+  }
+
+  @Post(':id/set-draft')
+  setDraft(@Param('id') id: string) {
+    return this.svc.setDraft(id);
+  }
+
+  @Post(':id/customer-confirm')
+  customerConfirm(@Param('id') id: string) {
+    return this.svc.customerConfirm(id);
+  }
+
+  @Post(':id/lock-window-now')
+  lockWindowNow(@Param('id') id: string) {
+    return this.svc.lockWindowNow(id);
   }
 
   @Patch(':id/schedule-state')
