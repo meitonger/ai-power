@@ -24,6 +24,26 @@ type Appointment = {
 
 type ViewType = 'calendar' | 'table';
 
+type GraphQLAppointment = Omit<Appointment, 'address'> & { address?: string | null };
+
+const buildAppointmentsQuery = (includeAddress: boolean) => `
+  query {
+    appointments {
+      id
+      ${includeAddress ? 'address' : ''}
+      slotStart
+      slotEnd
+      scheduleState
+      dispatchStatus
+      schedulingMode
+      arrivalWindowStart
+      windowLockedAt
+      user { name email }
+      vehicle { make model year trim }
+    }
+  }
+`;
+
 // Use centralized GraphQL URL
 const GQL = GRAPHQL_URL;
 
@@ -32,47 +52,61 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [viewType, setViewType] = useState<ViewType>('calendar');
+  const [addressSupported, setAddressSupported] = useState(true);
 
   const fetchAppointments = async () => {
     setLoading(true);
     try {
-      const res = await fetch(GQL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query {
-              appointments {
-                id
-                address
-                slotStart
-                slotEnd
-                scheduleState
-                dispatchStatus
-                schedulingMode
-                arrivalWindowStart
-                windowLockedAt
-                user { name email }
-                vehicle { make model year trim }
-              }
-            }
-          `,
-        }),
-      });
-  
-      const json = await res.json();
-  
+      const runQuery = async (includeAddress: boolean) => {
+        const res = await fetch(GQL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: buildAppointmentsQuery(includeAddress) }),
+        });
+        return res.json();
+      };
+
+      let includeAddress = addressSupported;
+      let json = await runQuery(includeAddress);
+
       if (json.errors) {
-        console.error('❌ GraphQL error:', json.errors);
-        setMsg(json.errors[0].message);
-        setRows([]); // empty
-      } else {
-        console.log('✅ Got data:', json.data);
-        setRows(json.data.appointments ?? []);
+        const missingAddress =
+          includeAddress &&
+          Array.isArray(json.errors) &&
+          json.errors.some(
+            (err: any) =>
+              typeof err?.message === 'string' &&
+              err.message.includes('Cannot query field \"address\"'),
+          );
+
+        if (missingAddress) {
+          console.warn('⚠️ Address field not supported by API yet, retrying without it.');
+          setAddressSupported(false);
+          json = await runQuery(false);
+          if (json.errors) {
+            console.error('❌ GraphQL error after fallback:', json.errors);
+            throw new Error(json.errors[0].message);
+          }
+        } else {
+          console.error('❌ GraphQL error:', json.errors);
+          throw new Error(json.errors[0].message);
+        }
       }
+
+      const normalized: Appointment[] = (json.data?.appointments ?? []).map(
+        (appt: GraphQLAppointment) => ({
+          ...appt,
+          address: appt.address ?? '',
+        }),
+      );
+
+      console.log('✅ Got data:', json.data);
+      setRows(normalized);
+      setMsg(null);
     } catch (e: any) {
       console.error('❌ Fetch failed:', e.message);
       setMsg(e.message);
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -197,7 +231,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {msg && <div style={{color:'#b00', marginTop:8, marginBottom:12, background:'#fee', padding:12, borderRadius:8}}>{msg}</div>}
+        {msg && <div style={{color:'#b00', marginTop:8, marginBottom:12, background:'#fee', padding:12, borderRadius:8}}>{msg}</div>}
+        {!msg && !addressSupported && (
+          <div style={{color:'#92400e', marginTop:8, marginBottom:12, background:'#fef3c7', padding:12, borderRadius:8}}>
+            Address field is not available on the connected API yet. The schedule loads without it, but consider updating the API to surface appointment addresses.
+          </div>
+        )}
       
       {loading ? (
         <div style={{textAlign:'center', padding:40, color:'#666'}}>Loading truck schedule...</div>
