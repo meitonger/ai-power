@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
@@ -10,6 +10,21 @@ export class AppointmentsController {
   @Get()
   findAll() {
     return this.svc.findAll();
+  }
+
+  @Get('availability')
+  checkAvailability(
+    @Query('start') start: string,
+    @Query('end') end: string,
+    @Query('userId') userId?: string,
+    @Query('ignoreId') ignoreId?: string,
+  ) {
+    return this.svc.checkSlotAvailability({
+      slotStart: start,
+      slotEnd: end,
+      userId,
+      ignoreAppointmentId: ignoreId,
+    });
   }
 
   @Get(':id')
