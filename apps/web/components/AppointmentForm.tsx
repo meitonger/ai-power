@@ -60,6 +60,17 @@ const getDefaultSlotRange = () => {
   return { start: toLocalInput(start), end: toLocalInput(end) };
 };
 
+const formatSlotSummary = (startIso?: string | null, endIso?: string | null) => {
+  if (!startIso || !endIso) return '';
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+  const day = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${day} ${startTime} - ${endTime}`;
+};
+
 export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: Appointment[]) => void }) {
   const [step, setStep] = React.useState<Step>(1);
   const [vehicles, setVehicles] = React.useState<Vehicle[]>([]);
@@ -84,6 +95,10 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [slotEndLocal, setSlotEndLocal] = React.useState('');
   const [address, setAddress] = React.useState('');
   const [orderNotes, setOrderNotes] = React.useState('');
+  const [slotStatus, setSlotStatus] = React.useState<'idle'|'checking'|'available'|'blocked'|'error'>('idle');
+  const [slotStatusMsg, setSlotStatusMsg] = React.useState('');
+  const [slotConflictRange, setSlotConflictRange] = React.useState<{ start: string; end: string } | null>(null);
+  const slotCheckSeq = React.useRef(0);
 
   // per-vehicle lines
   const [lines, setLines] = React.useState<LineItem[]>([createEmptyLine()]);
@@ -108,6 +123,58 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     setSlotEndLocal(e => e || end);
   }, []);
 
+  React.useEffect(() => {
+    if (!slotStartLocal || !slotEndLocal) {
+      setSlotStatus('idle');
+      setSlotStatusMsg('');
+      setSlotConflictRange(null);
+      return;
+    }
+    const start = new Date(slotStartLocal);
+    const end = new Date(slotEndLocal);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end <= start) {
+      setSlotStatus('error');
+      setSlotStatusMsg('Enter a valid time range.');
+      setSlotConflictRange(null);
+      return;
+    }
+    const requestId = ++slotCheckSeq.current;
+    setSlotStatus('checking');
+    setSlotStatusMsg('');
+    setSlotConflictRange(null);
+    const params = new URLSearchParams({
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+    if (userId) params.set('userId', userId);
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await apiGet<{ available: boolean; conflict: { slotStart: string; slotEnd: string } | null }>(
+          `/appointments/availability?${params.toString()}`,
+        );
+        if (cancelled || requestId !== slotCheckSeq.current) return;
+        if (result.available) {
+          setSlotStatus('available');
+          setSlotStatusMsg('');
+          setSlotConflictRange(null);
+        } else {
+          setSlotStatus('blocked');
+          setSlotConflictRange(result.conflict ? { start: result.conflict.slotStart, end: result.conflict.slotEnd } : null);
+          setSlotStatusMsg('Selected time window is already booked.');
+        }
+      } catch (err: any) {
+        if (cancelled || requestId !== slotCheckSeq.current) return;
+        setSlotStatus('error');
+        setSlotStatusMsg(err?.message ?? 'Failed to check slot availability.');
+        setSlotConflictRange(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slotStartLocal, slotEndLocal, userId]);
+
   const resetWizard = React.useCallback(() => {
     const { start, end } = getDefaultSlotRange();
     setStep(1);
@@ -127,6 +194,10 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     setCreatingVehicle(false);
     setCreatingUser(false);
     setResetCountdown(null);
+    setSlotStatus('idle');
+    setSlotStatusMsg('');
+    setSlotConflictRange(null);
+    slotCheckSeq.current = 0;
   }, []);
 
   React.useEffect(() => {
@@ -402,41 +473,68 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                        onChange={(e)=>{ setCustomerPhone(e.target.value); }} />
               </label>
 
-              <div className="grid2">
-                <label>
-                  Start time
-                  <input type="datetime-local" value={slotStartLocal} onChange={(e)=>setSlotStartLocal(e.target.value)} />
-                </label>
-                <label>
-                  End time
-                  <input type="datetime-local" value={slotEndLocal} onChange={(e)=>setSlotEndLocal(e.target.value)} />
-                </label>
-              </div>
+                <div className="grid2">
+                  <label>
+                    Start time
+                    <input type="datetime-local" value={slotStartLocal} onChange={(e)=>setSlotStartLocal(e.target.value)} />
+                  </label>
+                  <label>
+                    End time
+                    <input type="datetime-local" value={slotEndLocal} onChange={(e)=>setSlotEndLocal(e.target.value)} />
+                  </label>
+                </div>
 
-              <label>
-                Address
-                <input type="text" placeholder="123 Main St, Toronto, ON" value={address} onChange={(e)=>setAddress(e.target.value)} />
-              </label>
+                {slotStatus !== 'idle' && (
+                  <div className={`slotStatusBanner ${slotStatus}`}>
+                    {slotStatus === 'checking' && 'Checking slot availability…'}
+                    {slotStatus === 'available' && 'Time slot available.'}
+                    {slotStatus === 'blocked' && (
+                      <>
+                        {slotStatusMsg || 'Selected time window is already booked.'}
+                        {slotConflictRange && (
+                          <span className="slotStatusRange">
+                            {' '}
+                            ({formatSlotSummary(slotConflictRange.start, slotConflictRange.end)})
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {slotStatus === 'error' && (slotStatusMsg || 'Unable to verify slot availability right now.')}
+                  </div>
+                )}
 
-              <div className="nav">
-                <button className="primary" onClick={async ()=>{
-                  const err = validateStep(1);
-                  if (err) { setError(err); return; }
-                  try {
-                    setCreatingUser(true);
-                    const id = await ensureUser(customerName.trim(), customerEmail.trim(), customerPhone.trim() || undefined);
-                    setUserId(id);
-                    setError(null);
-                    setStep(2);
-                  } catch (e:any) {
-                    setError(e?.message ?? 'Failed to create customer');
-                  } finally {
-                    setCreatingUser(false);
-                  }
-                }} disabled={creatingUser}>
-                  {creatingUser ? 'Saving customer…' : 'Next →'}
-                </button>
-              </div>
+                <label>
+                  Address
+                  <input type="text" placeholder="123 Main St, Toronto, ON" value={address} onChange={(e)=>setAddress(e.target.value)} />
+                </label>
+
+                <div className="nav">
+                  <button className="primary" onClick={async ()=>{
+                    const err = validateStep(1);
+                    if (err) { setError(err); return; }
+                    if (slotStatus === 'blocked') {
+                      setError('Selected time slot is already booked. Please pick a different window.');
+                      return;
+                    }
+                    if (slotStatus === 'checking') {
+                      setError('Checking slot availability, please wait a moment.');
+                      return;
+                    }
+                    try {
+                      setCreatingUser(true);
+                      const id = await ensureUser(customerName.trim(), customerEmail.trim(), customerPhone.trim() || undefined);
+                      setUserId(id);
+                      setError(null);
+                      setStep(2);
+                    } catch (e:any) {
+                      setError(e?.message ?? 'Failed to create customer');
+                    } finally {
+                      setCreatingUser(false);
+                    }
+                  }} disabled={creatingUser || slotStatus === 'blocked' || slotStatus === 'checking'}>
+                    {creatingUser ? 'Saving customer…' : 'Next →'}
+                  </button>
+                </div>
             </section>
           )}
 
@@ -664,6 +762,12 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         .success { background:#ecfdf5; color:#065f46; padding:8px 10px; border-radius:8px; margin-bottom:8px; }
         .countdown { font-size:12px; margin-top:4px; color:#047857; }
         .addVehicle { border:1px dashed #e5e7eb; border-radius:8px; padding:10px; margin:8px 0; background:#fafafa; }
+        .slotStatusBanner { margin-top:8px; border-radius:8px; padding:8px 12px; font-size:13px; border:1px solid transparent; }
+        .slotStatusBanner.available { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }
+        .slotStatusBanner.checking { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+        .slotStatusBanner.blocked,
+        .slotStatusBanner.error { background:#fee2e2; border-color:#fecaca; color:#b91c1c; }
+        .slotStatusRange { font-weight:600; }
       `}</style>
     </div>
   );
