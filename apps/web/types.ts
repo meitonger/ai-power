@@ -26,4 +26,16 @@ export interface User {
     address: string;
     notes?: string | null;
   }
+
+export interface VehicleCatalogMake {
+  id: number;
+  name: string;
+}
+
+export interface VehicleCatalogModel {
+  id: number;
+  name: string;
+  makeId: number;
+  makeName: string;
+}
   

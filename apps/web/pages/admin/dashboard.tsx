@@ -12,6 +12,7 @@ type Appointment = {
   user?: { name: string; email: string };
   vehicle?: { make: string; model: string; year: number; trim: string };
   userId: string;
+  vehicleId?: string;
   slotStart: string;
   slotEnd: string;
   address: string;
@@ -19,7 +20,9 @@ type Appointment = {
   dispatchStatus: string;
   schedulingMode: string;
   arrivalWindowStart?: string | null;
+  arrivalWindowEnd?: string | null;
   windowLockedAt?: string | null;
+  techId?: string | null;
 };
 
 type ViewType = 'calendar' | 'table';

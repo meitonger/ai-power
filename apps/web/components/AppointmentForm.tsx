@@ -1,6 +1,6 @@
 import React from 'react';
 import { apiGet, apiPost } from '../lib/api';
-import type { User, Vehicle, Appointment } from '../types';
+import type { Appointment, User, Vehicle, VehicleCatalogMake, VehicleCatalogModel } from '../types';
 
 /* ---------- pricing tables (edit any time) ---------- */
 type TireKey = 'tire_on_sedan' | 'tire_off_sedan' | 'tire_on_pickup' | 'tire_off_pickup';
@@ -81,6 +81,11 @@ const formatSlotSummary = (startIso?: string | null, endIso?: string | null) => 
 export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: Appointment[]) => void }) {
   const [step, setStep] = React.useState<Step>(1);
   const [vehicles, setVehicles] = React.useState<Vehicle[]>([]);
+  const [vehicleMakes, setVehicleMakes] = React.useState<VehicleCatalogMake[]>([]);
+  const [vehicleModels, setVehicleModels] = React.useState<VehicleCatalogModel[]>([]);
+  const [vehicleCatalogError, setVehicleCatalogError] = React.useState<string | null>(null);
+  const [catalogLoading, setCatalogLoading] = React.useState(false);
+  const [modelsLoading, setModelsLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
@@ -89,9 +94,15 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
   const [creatingUser, setCreatingUser] = React.useState(false);
   const [showAddVehicleForLine, setShowAddVehicleForLine] = React.useState<number | null>(null);
   const [creatingVehicle, setCreatingVehicle] = React.useState(false);
-  const [newVehicle, setNewVehicle] = React.useState<{ make: string; model: string; year: string }>({
-    make: '', model: '', year: ''
+  const [manualVehicleEntry, setManualVehicleEntry] = React.useState(false);
+  const [newVehicle, setNewVehicle] = React.useState<{ make: string; model: string; makeId: string; modelId: string; year: string }>({
+    make: '',
+    model: '',
+    makeId: '',
+    modelId: '',
+    year: '',
   });
+  const modelsCacheRef = React.useRef<Record<string, VehicleCatalogModel[]>>({});
 
   // shared booking
   const [userId, setUserId] = React.useState('');
@@ -125,6 +136,31 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         setLoading(false);
       }
     })();
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setCatalogLoading(true);
+    (async () => {
+      try {
+        setVehicleCatalogError(null);
+        const makes = await apiGet<VehicleCatalogMake[]>('/vehicles/catalog/makes');
+        if (!cancelled) {
+          setVehicleMakes(makes);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          setVehicleCatalogError(e?.message ?? 'Failed to load vehicle catalog.');
+        }
+      } finally {
+        if (!cancelled) {
+          setCatalogLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // default times: next top of hour -> +1h
@@ -185,29 +221,31 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     };
   }, [slotStartLocal, slotEndLocal, userId]);
 
-  const resetWizard = React.useCallback(() => {
-    const { start } = getDefaultSlotRange();
-    setStep(1);
-    setUserId('');
-    setCustomerName('');
-    setCustomerEmail('');
-    setCustomerPhone('');
-    setSlotStartLocal(start);
-    setAddress('');
-    setOrderNotes('');
-    setLines([createEmptyLine()]);
-    setSuccessMsg(null);
-    setError(null);
-    setShowAddVehicleForLine(null);
-    setNewVehicle({ make: '', model: '', year: '' });
-    setCreatingVehicle(false);
-    setCreatingUser(false);
-    setResetCountdown(null);
-    setSlotStatus('idle');
-    setSlotStatusMsg('');
-    setSlotConflictRange(null);
-    slotCheckSeq.current = 0;
-  }, []);
+    const resetWizard = React.useCallback(() => {
+      const { start } = getDefaultSlotRange();
+      setStep(1);
+      setUserId('');
+      setCustomerName('');
+      setCustomerEmail('');
+      setCustomerPhone('');
+      setSlotStartLocal(start);
+      setAddress('');
+      setOrderNotes('');
+      setLines([createEmptyLine()]);
+      setSuccessMsg(null);
+      setError(null);
+      setShowAddVehicleForLine(null);
+      setManualVehicleEntry(false);
+      setVehicleModels([]);
+      setNewVehicle({ make: '', model: '', makeId: '', modelId: '', year: '' });
+      setCreatingVehicle(false);
+      setCreatingUser(false);
+      setResetCountdown(null);
+      setSlotStatus('idle');
+      setSlotStatusMsg('');
+      setSlotConflictRange(null);
+      slotCheckSeq.current = 0;
+    }, []);
 
   React.useEffect(() => {
     if (resetCountdown === null) return;
@@ -243,6 +281,48 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
     // If customer changed, reset vehicles selection to force re-pick
     setLines(prev => prev.map(l => ({ ...l, vehicleId: '' })));
   }, [userId]);
+
+  React.useEffect(() => {
+    if (manualVehicleEntry) {
+      setVehicleModels([]);
+      setModelsLoading(false);
+      return;
+    }
+    const makeId = newVehicle.makeId;
+    if (!makeId) {
+      setVehicleModels([]);
+      setModelsLoading(false);
+      return;
+    }
+    const cached = modelsCacheRef.current[makeId];
+    if (cached) {
+      setVehicleModels(cached);
+      setModelsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setModelsLoading(true);
+    (async () => {
+      try {
+        setVehicleCatalogError(null);
+        const models = await apiGet<VehicleCatalogModel[]>(`/vehicles/catalog/models?makeId=${makeId}`);
+        if (cancelled) return;
+        modelsCacheRef.current[makeId] = models;
+        setVehicleModels(models);
+      } catch (e: any) {
+        if (cancelled) return;
+        setVehicleModels([]);
+        setVehicleCatalogError(e?.message ?? 'Failed to load vehicle models.');
+      } finally {
+        if (!cancelled) {
+          setModelsLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [manualVehicleEntry, newVehicle.makeId]);
 
   function lineSubtotal(line: LineItem): number {
     let sum = 0;
@@ -317,6 +397,44 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
       return { ...l, extras };
     }));
   }
+
+    const handleSelectMake = React.useCallback((makeId: string) => {
+      const choice = vehicleMakes.find(m => String(m.id) === makeId);
+      setNewVehicle(prev => ({
+        ...prev,
+        makeId,
+        make: choice?.name ?? '',
+        modelId: '',
+        model: '',
+      }));
+      setVehicleModels([]);
+    }, [vehicleMakes]);
+
+    const handleSelectModel = React.useCallback((modelId: string) => {
+      const choice = vehicleModels.find(m => String(m.id) === modelId);
+      setNewVehicle(prev => ({
+        ...prev,
+        modelId,
+        model: choice?.name ?? '',
+        makeId: choice ? String(choice.makeId) : prev.makeId,
+        make: choice?.makeName ?? prev.make,
+      }));
+    }, [vehicleModels]);
+
+    const toggleManualVehicleEntry = React.useCallback(() => {
+      setManualVehicleEntry(prev => {
+        const next = !prev;
+        setVehicleModels([]);
+        setNewVehicle(v => ({
+          ...v,
+          makeId: '',
+          modelId: '',
+          make: next ? v.make : '',
+          model: '',
+        }));
+        return next;
+      });
+    }, []);
 
     function validateStep(s: Step): string | null {
       if (s === 1) {
@@ -421,10 +539,12 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
         trim: 'Standard',
         tireSize: 'N/A',
       });
-      setVehicles(prev => [...prev, created]);
-      updateLine(lineIndex, 'vehicleId', created.id);
-      setShowAddVehicleForLine(null);
-      setNewVehicle({ make: '', model: '', year: '' });
+        setVehicles(prev => [...prev, created]);
+        updateLine(lineIndex, 'vehicleId', created.id);
+        setShowAddVehicleForLine(null);
+        setManualVehicleEntry(false);
+        setVehicleModels([]);
+        setNewVehicle({ make: '', model: '', makeId: '', modelId: '', year: '' });
     } catch (e: any) {
       setError(e?.message ?? 'Failed to create vehicle');
     } finally {
@@ -576,38 +696,110 @@ export default function AppointmentWizard({ onSuccess }: { onSuccess?: (appts: A
                     </label>
                     <div className="mini" style={{display:'flex', gap:8, alignItems:'center'}}>
                       <span>{line.vehicleId ? 'Selected.' : 'No vehicle selected.'}</span>
-                      <button
-                        type="button"
-                        className="link small"
-                        onClick={()=>{ setShowAddVehicleForLine(showAddVehicleForLine===idx ? null : idx); setError(null); }}
-                      >{showAddVehicleForLine===idx ? 'Cancel add' : '+ Add new vehicle'}</button>
+                        <button
+                          type="button"
+                          className="link small"
+                          onClick={()=>{
+                            const isOpen = showAddVehicleForLine===idx;
+                            setShowAddVehicleForLine(isOpen ? null : idx);
+                            if (!isOpen) {
+                              setManualVehicleEntry(false);
+                              setVehicleModels([]);
+                              setNewVehicle({ make: '', model: '', makeId: '', modelId: '', year: '' });
+                            }
+                            setError(null);
+                          }}
+                        >{showAddVehicleForLine===idx ? 'Cancel add' : '+ Add new vehicle'}</button>
                     </div>
-                    {showAddVehicleForLine===idx && (
-                      <div className="addVehicle">
-                        <label>
-                          Year
-                          <input type="number" placeholder="e.g., 2023" value={newVehicle.year}
-                                 onChange={(e)=>setNewVehicle(v=>({ ...v, year:e.target.value }))} />
-                        </label>
-                        <label>
-                          Make
-                          <input type="text" placeholder="e.g., Tesla" value={newVehicle.make}
-                                 onChange={(e)=>setNewVehicle(v=>({ ...v, make:e.target.value }))} />
-                        </label>
-                        <label>
-                          Model
-                          <input type="text" placeholder="e.g., Model Y" value={newVehicle.model}
-                                 onChange={(e)=>setNewVehicle(v=>({ ...v, model:e.target.value }))} />
-                        </label>
-                        <div className="nav" style={{justifyContent:'flex-start'}}>
-                          <button type="button" className="primary" disabled={creatingVehicle}
-                                  onClick={()=>createVehicleForLine(idx)}>
-                            {creatingVehicle ? 'Adding…' : 'Save vehicle'}
-                          </button>
-                          <button type="button" className="secondary" onClick={()=>setShowAddVehicleForLine(null)}>Cancel</button>
+                      {showAddVehicleForLine===idx && (
+                        <div className="addVehicle">
+                          <label>
+                            Year
+                            <input
+                              type="number"
+                              placeholder="e.g., 2023"
+                              value={newVehicle.year}
+                              onChange={(e)=>setNewVehicle(v=>({ ...v, year:e.target.value }))}
+                            />
+                          </label>
+                          <label>
+                            Make
+                            <select
+                              value={newVehicle.makeId}
+                              disabled={manualVehicleEntry}
+                              onChange={(e)=>handleSelectMake(e.target.value)}
+                            >
+                              <option value="">-- Select make --</option>
+                              {vehicleMakes.map(m => (
+                                <option key={m.id} value={String(m.id)}>{m.name}</option>
+                              ))}
+                            </select>
+                            {catalogLoading && <small className="mini">Loading makes…</small>}
+                          </label>
+                          <label>
+                            Model
+                            <select
+                              value={newVehicle.modelId}
+                              disabled={manualVehicleEntry || !newVehicle.makeId}
+                              onChange={(e)=>handleSelectModel(e.target.value)}
+                            >
+                              <option value="">{newVehicle.makeId ? '-- Select model --' : 'Pick a make first'}</option>
+                              {vehicleModels.map(m => (
+                                <option key={m.id} value={String(m.id)}>{m.name}</option>
+                              ))}
+                            </select>
+                            {modelsLoading && !manualVehicleEntry && <small className="mini">Loading models…</small>}
+                          </label>
+                          {vehicleCatalogError && (
+                            <div className="mini" style={{ color:'#b91c1c' }}>
+                              Vehicle database unavailable: {vehicleCatalogError}. You can enter the details manually below.
+                            </div>
+                          )}
+                          <div className="mini" style={{ margin: '4px 0' }}>
+                            <button type="button" className="link small" onClick={toggleManualVehicleEntry}>
+                              {manualVehicleEntry ? '← Use vehicle database list' : 'Can’t find it? Enter manually'}
+                            </button>
+                          </div>
+                          {manualVehicleEntry && (
+                            <>
+                              <label>
+                                Make (manual)
+                                <input
+                                  type="text"
+                                  placeholder="e.g., Tesla"
+                                  value={newVehicle.make}
+                                  onChange={(e)=>setNewVehicle(v=>({ ...v, make:e.target.value, makeId:'', modelId:'' }))}
+                                />
+                              </label>
+                              <label>
+                                Model (manual)
+                                <input
+                                  type="text"
+                                  placeholder="e.g., Model Y"
+                                  value={newVehicle.model}
+                                  onChange={(e)=>setNewVehicle(v=>({ ...v, model:e.target.value, modelId:'' }))}
+                                />
+                              </label>
+                            </>
+                          )}
+                          <div className="nav" style={{justifyContent:'flex-start'}}>
+                            <button type="button" className="primary" disabled={creatingVehicle}
+                                    onClick={()=>createVehicleForLine(idx)}>
+                              {creatingVehicle ? 'Adding…' : 'Save vehicle'}
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary"
+                              onClick={()=>{
+                                setShowAddVehicleForLine(null);
+                                setManualVehicleEntry(false);
+                                setVehicleModels([]);
+                                setNewVehicle({ make: '', model: '', makeId: '', modelId: '', year: '' });
+                              }}
+                            >Cancel</button>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                     {(!line.vehicleId) && (
                       <div className="mini" style={{marginTop:4}}>
                         Vehicles are filtered by the created customer. Add the customer first in Step 1.
